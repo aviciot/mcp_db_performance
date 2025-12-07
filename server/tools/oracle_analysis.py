@@ -105,15 +105,29 @@ def list_available_databases() -> dict:
             conn = oracle_connector.connect(db_name)
             cur = conn.cursor()
             
-            # Get database version and name
-            cur.execute("SELECT banner FROM v$version WHERE ROWNUM = 1")
-            version = cur.fetchone()[0] if cur.rowcount > 0 else "Unknown"
+            version = "Unknown"
+            db_instance = "Unknown"
             
-            cur.execute("SELECT name FROM v$database")
-            db_instance = cur.fetchone()[0] if cur.rowcount > 0 else "Unknown"
+            # Try to get database version and name (requires V$ access)
+            try:
+                cur.execute("SELECT banner FROM v$version WHERE ROWNUM = 1")
+                row = cur.fetchone()
+                if row:
+                    version = row[0]
+                
+                cur.execute("SELECT name FROM v$database")
+                row = cur.fetchone()
+                if row:
+                    db_instance = row[0]
+            except Exception as v_error:
+                # User doesn't have V$ access, but connection is valid
+                if "ORA-00942" in str(v_error):
+                    logger.info(f"⚠️  {db_name}: Connected but no V$ view access")
+                else:
+                    raise  # Re-raise if it's not a permission issue
             
             db_info["status"] = "accessible"
-            db_info["message"] = f"Connected successfully"
+            db_info["message"] = "Connected successfully" if version != "Unknown" else "Connected (limited V$ access)"
             db_info["version"] = version
             db_info["instance"] = db_instance
             
