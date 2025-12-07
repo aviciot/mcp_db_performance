@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+
+# Virtual environments
+env/
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Editor/IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.docker/
+
+# Coverage / test
+.coverage
+htmlcov/
+coverage.xml
+pytest-cache/
+.pytest_cache/
+
+# Type checker
+.mypy_cache/
+.pytype/
+pyrightconfig.json
+
+# Local data
+*.sqlite3
+
+# 🔥 Sensitive secrets
+.env
+.env.*
+server/config/settings.yaml     # real credentials — DO NOT COMMIT

@@ -1,0 +1,7 @@
+fastmcp
+oracledb
+pyyaml
+starlette
+uvicorn
+httpx
+pydantic

@@ -1,0 +1,169 @@
+database_presets:
+
+  transformer_master:
+    user: stg
+    password: stg90
+    dsn: stgrndm-np-01.qa.bos.credorax.com:1521/stgdev
+
+server:
+  name: oracle_performance_mcp
+
+# ============================================================================
+# ORACLE SQL ANALYSIS CONFIGURATION
+# ============================================================================
+# Controls what data is collected during SQL performance analysis
+# Disable features if you lack DB privileges or want faster analysis
+
+oracle_analysis:
+  
+  # === CORE ANALYSIS (Cannot be disabled - fundamental) ===
+  core:
+    execution_plan:
+      enabled: true
+      description: "EXPLAIN PLAN showing optimizer's execution strategy"
+      criticality: CRITICAL
+      note: "Never executes actual SQL - only simulates plan"
+      
+    plan_details:
+      enabled: true
+      description: "Detailed plan steps with costs, cardinality, predicates"
+      criticality: CRITICAL
+      why_needed: "Shows filtering, join methods, access paths"
+
+  # === METADATA (Highly Recommended) ===
+  metadata:
+    table_statistics:
+      enabled: true
+      description: "Row counts, blocks, avg_row_len, last_analyzed date"
+      criticality: HIGH
+      why_needed: "Optimizer relies on these for cardinality estimates"
+      performance_impact: LOW
+      tables_accessed: [ALL_TABLES]
+      
+    index_statistics:
+      enabled: true
+      description: "Index structure, clustering factor, distinct keys, status"
+      criticality: HIGH
+      why_needed: "Explains why indexes are/aren't chosen"
+      performance_impact: LOW
+      tables_accessed: [ALL_INDEXES]
+      
+    index_columns:
+      enabled: true
+      description: "Which columns are in each index"
+      criticality: HIGH
+      why_needed: "Matches predicates to available indexes"
+      performance_impact: LOW
+      tables_accessed: [ALL_IND_COLUMNS]
+      
+    column_statistics:
+      enabled: true
+      description: "Distinct values, nulls, density, histogram buckets"
+      criticality: HIGH
+      why_needed: "Detects data skew affecting cardinality estimates"
+      performance_impact: LOW
+      tables_accessed: [ALL_TAB_COL_STATISTICS]
+      note: "Filters to columns mentioned in SQL only"
+      
+    constraints:
+      enabled: true
+      description: "Primary keys, foreign keys, unique constraints"
+      criticality: HIGH
+      why_needed: "Optimizer uses for join elimination & transformations"
+      performance_impact: LOW
+      tables_accessed: [ALL_CONSTRAINTS, ALL_CONS_COLUMNS]
+      
+    partition_info:
+      enabled: true
+      description: "Partition type, keys, count, subpartitioning"
+      criticality: HIGH
+      why_needed: "Essential for diagnosing partition pruning issues"
+      performance_impact: LOW
+      tables_accessed: [ALL_PART_TABLES, ALL_PART_KEY_COLUMNS]
+
+  # === OPTIMIZER CONFIGURATION ===
+  optimizer:
+    parameters:
+      enabled: true
+      description: "Optimizer mode, index cost adj, dynamic sampling, etc."
+      criticality: HIGH
+      why_needed: "Explains WHY optimizer chose a specific plan"
+      performance_impact: LOW
+      requires_privileges: SELECT on V$PARAMETER
+      tables_accessed: [V$PARAMETER]
+      fallback_on_error: true
+
+  # === STORAGE & SIZING ===
+  storage:
+    segment_sizes:
+      enabled: true
+      description: "Actual disk space (MB/GB) used by tables & indexes"
+      criticality: MEDIUM
+      why_needed: "Helps understand I/O costs for full scans"
+      performance_impact: LOW
+      requires_privileges: SELECT on DBA_SEGMENTS or USER_SEGMENTS
+      tables_accessed: [DBA_SEGMENTS, USER_SEGMENTS]
+      fallback: "Calculate from blocks * block_size if no access"
+      fallback_on_error: true
+
+  # === RUNTIME DIAGNOSTICS ===
+  runtime:
+    sql_execution_stats:
+      enabled: false
+      description: "Actual executions, buffer gets, CPU time, elapsed time"
+      criticality: MEDIUM
+      why_needed: "Shows real-world performance vs estimated"
+      performance_impact: LOW
+      requires_privileges: SELECT on V$SQL
+      tables_accessed: [V$SQL]
+      when_to_use: "Only when sql_id is provided for already-executed SQL"
+      fallback_on_error: true
+      
+    partition_pruning_diagnostic:
+      enabled: true
+      description: "Detects when partition pruning fails despite partition key in WHERE"
+      criticality: HIGH
+      why_needed: "Critical for partitioned tables - prevents full scans"
+      performance_impact: NEGLIGIBLE
+      note: "Computed from existing data, no extra queries"
+
+  # === COMPARISON MODE ===
+  comparison:
+    quick_compare:
+      enabled: true
+      description: "Fast plan comparison without re-fetching metadata"
+      criticality: MEDIUM
+      why_needed: "Speeds up iteration when testing query improvements"
+      performance_impact: LOW
+      note: "Only runs EXPLAIN PLAN, reuses metadata from previous analysis"
+
+# ============================================================================
+# ANALYSIS MODE PRESETS
+# ============================================================================
+# Quick shortcuts for common scenarios
+
+analysis_modes:
+  quick:
+    description: "Fastest - plan and basic stats only"
+    enabled_features:
+      - core.execution_plan
+      - core.plan_details
+      - metadata.table_statistics
+      - metadata.index_statistics
+    
+  standard:
+    description: "Balanced - all metadata + optimizer params (recommended)"
+    enabled_features:
+      - all metadata features
+      - optimizer.parameters
+      - storage.segment_sizes
+      - runtime.partition_pruning_diagnostic
+    
+  deep:
+    description: "Comprehensive - everything enabled"
+    enabled_features:
+      - all features
+      
+  # Custom mode - user can override individual features
+  custom:
+    description: "Use individual feature flags from oracle_analysis section"
