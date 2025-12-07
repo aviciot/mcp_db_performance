@@ -144,7 +144,31 @@ oracle_analysis:
       fallback_on_error: true  # Gracefully skip if no V$ access
 ```
 
-### 3. Analysis Modes
+### 3. Logging Configuration
+Control debug output and verbosity:
+
+```yaml
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  show_tool_calls: true  # Log full tool invocations from LLM
+  show_sql_queries: false  # Log actual SQL queries executed (very verbose)
+```
+
+**Log Levels:**
+- **DEBUG**: Full SQL text, all queries, detailed traces
+- **INFO**: Tool calls, SQL preview (200 chars), major steps (default)
+- **WARNING**: Only warnings and errors
+- **ERROR**: Only errors
+
+**show_tool_calls**: When `true`, logs detailed information about each LLM tool invocation including:
+  - Tool name
+  - Database name
+  - SQL length and preview
+  - Execution timestamps
+
+**show_sql_queries**: When `true`, enables verbose SQL query logging (metadata queries executed by the collector). Use for deep debugging only.
+
+### 4. Analysis Modes
 Quick presets for common scenarios:
 - **quick**: Plan + basic stats only (fastest)
 - **standard**: All metadata + optimizer params (recommended)
@@ -232,6 +256,77 @@ server/
 ---
 
 
-## � Author
 
+### 
+
+mcpjam prompt
+
+
+You are a Oracle Database Performance Analyst.
+
+DB: transformer_master
+SQL: SELECT ID, ETL_RUN_ID FROM TRANSFORMER.DOC_ST WHERE ETL_RUN_ID > 100
+
+1) Call mcp  analyze_full_sql_context(db_name, sql_text)
+   - If facts are missing, empty, or {} → return:
+     {"error": "Tool returned no data. Cannot analyze."}
+
+2) Use only the returned “facts”.
+
+3. Produce a SHORT, focused JSON with ONLY the following keys:
+
+{
+  "summary": "Very short description of what the query does and its expected cost.",
+  
+  "bottlenecks": [
+    {
+      "issue": "Root cause",
+      "reason": "Why this hurts performance",
+      "evidence": "Specific plan step or statistic",
+      "severity": "CRITICAL|HIGH|MEDIUM|LOW"
+    }
+  ],
+
+  "recommendations": {
+    "indexes": [
+      {
+        "action": "create|drop",
+        "table": "OWNER.TABLE",
+        "columns": ["COL1", "COL2"],
+        "reason": "Why this index will help"
+      }
+    ],
+    "query_rewrite": {
+      "should_rewrite": true|false,
+      "suggestion": "One-sentence improved SQL pattern"
+    }
+  },
+
+  "stats_actions": [
+    {
+      "object": "OWNER.TABLE/COLUMN",
+      "action": "gather|histogram|extended",
+      "reason": "Why statistics need refresh"
+    }
+  ],
+
+  "partitioning": [
+    {
+      "table": "OWNER.TABLE",
+      "issue": "Missing pruning / scanning all partitions",
+      "suggestion": "How to improve pruning"
+    }
+  ],
+
+  "expected_gain": "Short estimate (e.g., 2x faster, major I/O drop)"
+}
+
+STRICT RULES:
+- Output MUST be valid JSON only (no commentary, no markdown).
+- Be concise. Avoid long explanations.
+- Base ALL conclusions ONLY on the provided MCP facts.
+
+
+## � Author
 Avi Cohen
+email: aviciot@gmail.com

@@ -1,5 +1,6 @@
 import yaml
 import os
+import logging
 
 SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "config/settings.yaml")
 
@@ -12,6 +13,12 @@ class Config:
         server = self._raw.get("server", {})
         self.server_name = server.get("name", "oracle_performance_mcp")
         self.server_port = server.get("port", 8300)
+
+        # Logging configuration
+        log_config = self._raw.get("logging", {})
+        self.log_level = log_config.get("level", "INFO").upper()
+        self.show_tool_calls = log_config.get("show_tool_calls", True)
+        self.show_sql_queries = log_config.get("show_sql_queries", False)
 
         # Database presets
         self.database_presets = self._raw.get("database_presets", {})

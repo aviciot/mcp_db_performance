@@ -4,13 +4,16 @@
 import re
 from datetime import datetime
 from collections import defaultdict
+from config import config
 
 # ============================================================
 # DEBUG HELPER
 # ============================================================
 
 def dbg(*msg):
-    print("[ORACLE-COLLECTOR]", *msg)
+    """Debug print with prefix - respects config.show_sql_queries"""
+    if config.show_sql_queries:
+        print("[ORACLE-COLLECTOR]", *msg)
 
 
 # ============================================================
@@ -553,6 +556,7 @@ def get_segment_sizes(cur, tables):
             ORDER BY s.owner, s.segment_name
         """
     ]
+    
     
     for i, q in enumerate(queries):
         try:

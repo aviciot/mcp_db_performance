@@ -5,8 +5,26 @@ database_presets:
     password: stg90
     dsn: stgrndm-np-01.qa.bos.credorax.com:1521/stgdev
 
+  way4_docker8:
+    user: inform
+    password: Term1k50
+    dsn: docker-lin07.dev1.bos.credorax.com:15208/orclpdb1
+
+  way4_docker7:
+    user: inform
+    password: Term1k50
+    dsn: docker-lin07.dev1.bos.credorax.com:15207/orclpdb1
+
 server:
   name: oracle_performance_mcp
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  show_tool_calls: true  # Log full tool invocations from LLM
+  show_sql_queries: false  # Log actual SQL queries executed (verbose)
 
 # ============================================================================
 # ORACLE SQL ANALYSIS CONFIGURATION
