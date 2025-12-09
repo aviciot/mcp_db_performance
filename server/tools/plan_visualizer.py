@@ -78,6 +78,10 @@ def get_operation_warning(operation: str, options: str, cost: int, cardinality: 
     """
     warnings = []
     
+    # Handle None options
+    if options is None:
+        options = ""
+    
     # Full table scans on large tables
     if operation == "TABLE ACCESS" and options == "FULL" and cost > 100:
         warnings.append("⚠️ HIGH-COST FULL SCAN")
@@ -132,13 +136,13 @@ def get_plan_summary(plan_details: list) -> dict:
             full_scans += 1
         if "INDEX" in op:
             index_scans += 1
-            if "SKIP SCAN" in opts:
+            if opts and "SKIP SCAN" in opts:
                 skip_scans += 1
         if "NESTED LOOPS" in op:
             nested_loops += 1
         if "HASH JOIN" in op:
             hash_joins += 1
-        if "PARTITION" in opts and "ALL" in opts:
+        if opts and "PARTITION" in opts and "ALL" in opts:
             partition_all += 1
     
     return {
