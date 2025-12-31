@@ -1,14 +1,15 @@
-# server/tools/explain_query_logic.py
+# server/tools/oracle_explain_logic.py
 """
-Business Logic Explanation Tool
+Oracle Business Logic Explanation Tool
 
-This tool explains the business logic behind SQL queries by:
+This tool explains the business logic behind Oracle SQL queries by:
 1. Extracting tables from the query
 2. Collecting metadata from Oracle (with PostgreSQL caching)
 3. Following relationships to understand the full context
-4. Generating a human-readable business explanation
+4. Generating a graph-friendly output for relationship visualization
+5. Creating LLM prompts for business explanation
 
-Uses the LLM to interpret technical metadata into business terms.
+For MySQL databases, use mysql_explain_logic.py instead.
 """
 
 import re
@@ -17,7 +18,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 
 # Import from sibling modules
-from .business_context_collector import collect_business_context
+from .oracle_business_context import collect_oracle_business_context
 
 logger = logging.getLogger("explain_query_logic")
 
@@ -320,22 +321,29 @@ def format_context_for_explanation(context: Dict[str, Any], sql: str) -> str:
     return "".join(parts)
 
 
-def generate_business_explanation_prompt(formatted_context: str) -> str:
+def generate_business_explanation_prompt(formatted_context: str, mermaid_diagram: str) -> str:
     """
-    Generate the prompt for the LLM to explain business logic.
+    Generate the prompt for the LLM to explain business logic and create visualization.
     """
-    return f"""You are a senior data analyst who excels at explaining complex database queries in business terms.
+    return f"""You are a senior data analyst explaining database queries to business stakeholders.
 
-Analyze the following SQL query and its database context, then provide:
+Analyze this SQL query and provide:
 
-1. **Business Purpose** - What business question or process does this query support?
-2. **Data Flow Summary** - How does data flow through the tables (in plain English)?
-3. **Key Business Entities** - What business concepts do the tables represent?
-4. **Important Relationships** - How are the business entities connected?
-5. **Filters and Conditions** - What business rules are enforced in the WHERE clause?
-6. **Potential Business Use Cases** - When would someone run this query?
+1. **Business Purpose** - What business question does this answer?
+2. **Data Flow** - How data flows through the tables (plain English)
+3. **Entity Summary** - One sentence per table explaining its business role
+4. **Key Relationships** - How entities connect (customer has orders, etc.)
 
-Focus on the BUSINESS meaning, not technical details. Write as if explaining to a business stakeholder.
+Then, generate a **Mermaid ER diagram** showing the relationships. Use this as your starting point and enhance it:
+
+```mermaid
+{mermaid_diagram}
+```
+
+Improve the diagram by:
+- Adding key columns to each entity
+- Using proper cardinality (||--o{{ for one-to-many, etc.)
+- Adding meaningful relationship labels
 
 ---
 
@@ -343,14 +351,92 @@ Focus on the BUSINESS meaning, not technical details. Write as if explaining to 
 
 ---
 
-Please provide your business-focused explanation:"""
+Provide your explanation, then the enhanced Mermaid diagram:"""
+
+
+# ============================================================
+# Graph Generation for Visualization
+# ============================================================
+
+def build_relationship_graph(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build a graph structure that LLM can use to generate visual diagrams.
+    
+    Output format is optimized for Mermaid diagram generation:
+    - nodes: tables with their type/domain info
+    - edges: relationships between tables
+    - mermaid: ready-to-use Mermaid diagram code
+    """
+    nodes = []
+    edges = []
+    
+    # Build nodes from table context
+    for key, table_ctx in context.get("table_context", {}).items():
+        owner, table = key
+        
+        # Determine node style based on table type
+        node_type = "entity"
+        if table_ctx.get("is_lookup"):
+            node_type = "lookup"
+        elif table_ctx.get("is_core_table"):
+            node_type = "core"
+        
+        nodes.append({
+            "id": f"{owner}.{table}",
+            "label": table,
+            "schema": owner,
+            "type": node_type,
+            "entity": table_ctx.get("inferred_entity_type"),
+            "domain": table_ctx.get("inferred_domain"),
+            "row_count": table_ctx.get("row_count"),
+            "description": table_ctx.get("comment")
+        })
+    
+    # Build edges from relationships
+    for rel in context.get("relationships", []):
+        from_owner, from_table = rel["from"]
+        to_owner, to_table = rel["to"]
+        
+        edges.append({
+            "from": f"{from_owner}.{from_table}",
+            "to": f"{to_owner}.{to_table}",
+            "from_column": ", ".join(rel["from_columns"]),
+            "to_column": ", ".join(rel["to_columns"]),
+            "label": f"{rel['from_columns'][0]} → {rel['to_columns'][0]}" if rel["from_columns"] else "FK"
+        })
+    
+    # Generate Mermaid diagram
+    mermaid_lines = ["erDiagram"]
+    
+    # Add relationships as Mermaid ER notation
+    for edge in edges:
+        from_short = edge["from"].split(".")[-1]
+        to_short = edge["to"].split(".")[-1]
+        mermaid_lines.append(f"    {from_short} }}|--|| {to_short} : \"{edge['label']}\"")
+    
+    # Add standalone nodes (tables with no relationships shown)
+    connected = set()
+    for edge in edges:
+        connected.add(edge["from"])
+        connected.add(edge["to"])
+    
+    for node in nodes:
+        if node["id"] not in connected:
+            mermaid_lines.append(f"    {node['label']} {{")
+            mermaid_lines.append(f"    }}")
+    
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "mermaid": "\n".join(mermaid_lines)
+    }
 
 
 # ============================================================
 # Main Tool Function
 # ============================================================
 
-async def explain_query_logic(
+async def explain_oracle_query_logic(
     sql: str,
     oracle_cursor,
     knowledge_db = None,
@@ -360,7 +446,7 @@ async def explain_query_logic(
     use_cache: bool = True
 ) -> Dict[str, Any]:
     """
-    Main entry point: Explain the business logic of a SQL query.
+    Main entry point: Explain the business logic of an Oracle SQL query.
     
     Args:
         sql: The SQL query to explain
@@ -373,7 +459,7 @@ async def explain_query_logic(
         
     Returns:
         Dict containing:
-        - formatted_context: Human-readable context summary
+        - graph: Nodes/edges for visualization (Mermaid-ready)
         - explanation_prompt: Ready-to-use LLM prompt
         - table_context: Detailed table metadata
         - relationships: Discovered relationships
@@ -412,7 +498,7 @@ async def explain_query_logic(
     
     # Step 4: Collect context from Oracle for uncached tables
     if uncached_tables:
-        oracle_context = collect_business_context(
+        oracle_context = collect_oracle_business_context(
             oracle_cursor,
             uncached_tables,
             follow_relationships=follow_relationships,
@@ -458,9 +544,12 @@ async def explain_query_logic(
         if (owner, table) in final_context["table_context"]:
             final_context["table_context"][(owner, table)]["is_core_table"] = True
     
-    # Step 6: Format for LLM
+    # Step 6: Build graph for visualization
+    graph = build_relationship_graph(final_context)
+    
+    # Step 7: Format for LLM
     formatted_context = format_context_for_explanation(final_context, sql)
-    explanation_prompt = generate_business_explanation_prompt(formatted_context)
+    explanation_prompt = generate_business_explanation_prompt(formatted_context, graph["mermaid"])
     
     # Final stats
     duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -472,18 +561,25 @@ async def explain_query_logic(
     
     return {
         "sql": sql,
-        "formatted_context": formatted_context,
+        "graph": graph,
         "explanation_prompt": explanation_prompt,
-        "table_context": {
-            f"{k[0]}.{k[1]}": v 
+        "tables": {
+            f"{k[0]}.{k[1]}": {
+                "name": v.get("table_name"),
+                "type": v.get("inferred_entity_type"),
+                "domain": v.get("inferred_domain"),
+                "is_lookup": v.get("is_lookup"),
+                "is_core": v.get("is_core_table"),
+                "description": v.get("comment"),
+                "row_count": v.get("row_count")
+            }
             for k, v in final_context["table_context"].items()
         },
         "relationships": [
             {
                 "from": f"{r['from'][0]}.{r['from'][1]}",
                 "to": f"{r['to'][0]}.{r['to'][1]}",
-                "from_columns": r["from_columns"],
-                "to_columns": r["to_columns"]
+                "columns": f"{', '.join(r['from_columns'])} → {', '.join(r['to_columns'])}"
             }
             for r in relationships
         ],

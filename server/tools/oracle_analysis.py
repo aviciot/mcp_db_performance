@@ -12,8 +12,8 @@ from history_tracker import normalize_and_hash, store_history, get_recent_histor
 from config import config
 
 # Business logic imports
-from tools.explain_query_logic import explain_query_logic
-from tools.business_context_collector import collect_business_context
+from tools.oracle_explain_logic import explain_oracle_query_logic
+from tools.oracle_business_context import collect_oracle_business_context
 from knowledge_db import get_knowledge_db
 
 

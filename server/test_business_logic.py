@@ -1,22 +1,22 @@
 # test_business_logic.py
 """
-Test script for the business logic explanation feature.
+Test script for the Oracle business logic explanation feature.
 
 Run from the server directory:
     python test_business_logic.py
 
 This script tests:
 1. SQL table extraction
-2. Business context collection from Oracle
-3. Knowledge DB caching
+2. Business context inference
+3. Mermaid graph generation
 """
 
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from tools.explain_query_logic import extract_tables_from_sql
-from tools.business_context_collector import (
+from tools.oracle_explain_logic import extract_tables_from_sql, build_relationship_graph
+from tools.oracle_business_context import (
     infer_entity_type,
     infer_domain,
     is_lookup_table
@@ -172,10 +172,106 @@ def test_lookup_detection():
     return failed == 0
 
 
+def test_graph_generation():
+    """Test Mermaid graph generation."""
+    print("\n=== Testing Graph Generation ===\n")
+    
+    # Mock context with tables and relationships
+    context = {
+        "table_context": {
+            ("SALES", "ORDERS"): {
+                "table_name": "ORDERS",
+                "is_core_table": True,
+                "is_lookup": False,
+                "inferred_entity_type": "order",
+                "inferred_domain": "ecommerce",
+                "row_count": 100000,
+                "comment": "Customer orders"
+            },
+            ("SALES", "CUSTOMERS"): {
+                "table_name": "CUSTOMERS",
+                "is_core_table": True,
+                "is_lookup": False,
+                "inferred_entity_type": "customer",
+                "inferred_domain": "ecommerce",
+                "row_count": 50000,
+                "comment": "Customer master data"
+            },
+            ("SALES", "STATUS_CODES"): {
+                "table_name": "STATUS_CODES",
+                "is_core_table": False,
+                "is_lookup": True,
+                "inferred_entity_type": "lookup",
+                "row_count": 10,
+                "comment": "Order status lookup"
+            }
+        },
+        "relationships": [
+            {
+                "from": ("SALES", "ORDERS"),
+                "to": ("SALES", "CUSTOMERS"),
+                "from_columns": ["CUSTOMER_ID"],
+                "to_columns": ["ID"]
+            },
+            {
+                "from": ("SALES", "ORDERS"),
+                "to": ("SALES", "STATUS_CODES"),
+                "from_columns": ["STATUS"],
+                "to_columns": ["CODE"]
+            }
+        ]
+    }
+    
+    graph = build_relationship_graph(context)
+    
+    passed = 0
+    failed = 0
+    
+    # Test nodes
+    if len(graph["nodes"]) == 3:
+        print("✅ PASS: Generated 3 nodes")
+        passed += 1
+    else:
+        print(f"❌ FAIL: Expected 3 nodes, got {len(graph['nodes'])}")
+        failed += 1
+    
+    # Test edges
+    if len(graph["edges"]) == 2:
+        print("✅ PASS: Generated 2 edges")
+        passed += 1
+    else:
+        print(f"❌ FAIL: Expected 2 edges, got {len(graph['edges'])}")
+        failed += 1
+    
+    # Test mermaid output
+    if "erDiagram" in graph["mermaid"]:
+        print("✅ PASS: Mermaid diagram starts with erDiagram")
+        passed += 1
+    else:
+        print("❌ FAIL: Mermaid should start with erDiagram")
+        failed += 1
+    
+    if "ORDERS" in graph["mermaid"] and "CUSTOMERS" in graph["mermaid"]:
+        print("✅ PASS: Mermaid contains table names")
+        passed += 1
+    else:
+        print("❌ FAIL: Mermaid missing table names")
+        failed += 1
+    
+    # Show generated mermaid for visual inspection
+    print("\n📊 Generated Mermaid Diagram:")
+    print("-" * 40)
+    print(graph["mermaid"])
+    print("-" * 40)
+    
+    print(f"\nGraph Generation: {passed} passed, {failed} failed")
+    return failed == 0
+
+
 def run_all_tests():
     """Run all unit tests."""
     print("=" * 60)
-    print("Business Logic Feature - Unit Tests")
+    print("Oracle Business Logic Feature - Unit Tests")
     print("=" * 60)
     
     all_passed = True
@@ -184,6 +280,7 @@ def run_all_tests():
     all_passed &= test_entity_inference()
     all_passed &= test_domain_inference()
     all_passed &= test_lookup_detection()
+    all_passed &= test_graph_generation()
     
     print("\n" + "=" * 60)
     if all_passed:

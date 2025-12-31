@@ -1,15 +1,14 @@
-# server/tools/business_context_collector.py
+# server/tools/oracle_business_context.py
 """
-Business Context Collector for Oracle Databases
+Oracle Business Context Collector
 
-Collects metadata from Oracle to build business understanding:
-- Table and column comments
-- Foreign key relationships
+Collects metadata from Oracle databases to build business understanding:
+- Table and column comments from ALL_TAB_COMMENTS / ALL_COL_COMMENTS
+- Foreign key relationships from ALL_CONSTRAINTS
 - Primary keys and unique constraints
-- Sample data patterns
-- Partition information
+- Row counts and table sizes
 
-This metadata is used to explain the business logic behind SQL queries.
+For MySQL databases, use mysql_business_context.py instead.
 """
 
 import re
@@ -18,7 +17,7 @@ from typing import Dict, List, Optional, Any, Tuple, Set
 from datetime import datetime
 from collections import defaultdict
 
-logger = logging.getLogger("business_context")
+logger = logging.getLogger("oracle_business_context")
 
 
 # ============================================================
@@ -606,14 +605,14 @@ def is_lookup_table(row_count: Optional[int], column_count: int) -> bool:
 # Main Collector Function
 # ============================================================
 
-def collect_business_context(
+def collect_oracle_business_context(
     cur,
     tables: List[Tuple[str, str]],
     follow_relationships: bool = True,
     max_depth: int = 2
 ) -> Dict[str, Any]:
     """
-    Collect comprehensive business context for tables.
+    Collect comprehensive business context for Oracle tables.
     
     Args:
         cur: Oracle cursor
