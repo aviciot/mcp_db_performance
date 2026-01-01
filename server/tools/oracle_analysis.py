@@ -403,7 +403,7 @@ def explain_business_logic(
         
         # Run the async explanation function synchronously
         result = asyncio.get_event_loop().run_until_complete(
-            explain_query_logic(
+            explain_oracle_query_logic(
                 sql=sql_text,
                 oracle_cursor=cur,
                 knowledge_db=knowledge_db,
@@ -538,7 +538,7 @@ def get_table_business_context(
             knowledge_db = None
         
         # Collect business context
-        context = collect_business_context(
+        context = collect_oracle_business_context(
             cur,
             resolved_tables,
             follow_relationships=follow_relationships,
@@ -547,7 +547,7 @@ def get_table_business_context(
         
         # Cache results if possible
         if knowledge_db:
-            from tools.explain_query_logic import cache_collected_context
+            from tools.oracle_explain_logic import cache_collected_context
             cache_collected_context(knowledge_db, context)
         
         # Format response
