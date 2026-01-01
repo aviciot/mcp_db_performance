@@ -844,12 +844,12 @@ def classify_query_intent(sql_text, plan_details):
 
 def detect_cartesian_products(plan_details):
     """
-    Detect Cartesian products (cross joins without predicates).
-    Returns warnings for potential unintended Cartesian products.
+    Detect potential Cartesian products (cross joins).
+    Reports facts - LLM will determine if this is intended or problematic.
     """
     dbg("-> detect_cartesian_products()")
     
-    warnings = []
+    detections = []
     
     for i, step in enumerate(plan_details):
         operation = step.get("operation", "")
@@ -865,45 +865,39 @@ def detect_cartesian_products(plan_details):
                 if next_step.get("access_predicates") or next_step.get("filter_predicates"):
                     has_predicate = True
             
-            # High cardinality without predicate = likely Cartesian product
+            # High cardinality without predicate
             if not has_predicate and cardinality and cardinality > 100000:
-                warnings.append({
-                    "severity": "CRITICAL",
-                    "issue": "Potential Cartesian product (cross join)",
+                detections.append({
+                    "type": "NESTED_LOOPS_NO_PREDICATE",
                     "operation": f"{operation} {options}".strip(),
                     "cardinality": cardinality,
                     "step_id": step.get("id"),
-                    "why": "NESTED LOOPS operation with very high cardinality and no join predicate",
-                    "impact": f"Produces {cardinality:,} rows (likely unintended)",
-                    "fix": "Add join condition between tables (e.g., AND t1.id = t2.id)"
+                    "has_join_predicate": False
                 })
-                dbg(f"🚨 Cartesian product detected at step {step.get('id')}: {cardinality:,} rows")
+                dbg(f"🚨 Potential Cartesian at step {step.get('id')}: {cardinality:,} rows")
         
         # MERGE JOIN CARTESIAN (explicit Cartesian)
         if operation == "MERGE JOIN" and "CARTESIAN" in options:
-            warnings.append({
-                "severity": "CRITICAL",
-                "issue": "Explicit Cartesian product",
+            detections.append({
+                "type": "EXPLICIT_CARTESIAN",
                 "operation": f"{operation} {options}".strip(),
                 "cardinality": cardinality,
                 "step_id": step.get("id"),
-                "why": "Oracle is performing an explicit Cartesian join (every row matched with every row)",
-                "impact": f"Produces {cardinality:,} rows - exponential growth",
-                "fix": "Review join conditions - missing ON clause or incorrect WHERE filters"
+                "has_join_predicate": False
             })
-            dbg(f"🚨 Explicit CARTESIAN detected at step {step.get('id')}")
+            dbg(f"🚨 Explicit CARTESIAN at step {step.get('id')}")
     
-    return warnings
+    return detections
 
 
-def diagnose_performance_issues(plan_details, table_stats, index_stats, column_stats, sql_text):
+def detect_full_table_scans(plan_details, table_stats, index_stats, column_stats, sql_text):
     """
-    Comprehensive performance issue diagnosis with natural language explanations.
-    Returns detailed diagnostics with severity, issue, why, and fix recommendations.
+    Detect full table scans and report factual information.
+    LLM will decide if this is a problem and what to do about it.
     """
-    dbg("-> diagnose_performance_issues()")
+    dbg("-> detect_full_table_scans()")
     
-    issues = []
+    scans = []
     sql_upper = (sql_text or "").upper()
     
     # Build table lookup for quick access
@@ -932,15 +926,6 @@ def diagnose_performance_issues(plan_details, table_stats, index_stats, column_s
             if table:
                 num_rows = table.get("num_rows", 0)
                 
-                # High severity if large table
-                severity = "LOW"
-                if num_rows > 10000000:  # 10M+
-                    severity = "CRITICAL"
-                elif num_rows > 1000000:  # 1M+
-                    severity = "HIGH"
-                elif num_rows > 100000:  # 100K+
-                    severity = "MEDIUM"
-                
                 # Extract WHERE clause columns
                 where_columns = []
                 if "WHERE" in sql_upper:
@@ -950,47 +935,40 @@ def diagnose_performance_issues(plan_details, table_stats, index_stats, column_s
                         if col_stat["column_name"] in where_part:
                             where_columns.append(col_stat["column_name"])
                 
-                # Check if indexes exist but not being used
+                # Check if indexes exist
                 available_indexes = index_lookup.get(table_key, [])
                 
-                issue = {
-                    "severity": severity,
-                    "issue": f"Full table scan on {obj_owner}.{obj_name}",
-                    "object": f"{obj_owner}.{obj_name}",
-                    "rows_scanned": num_rows,
+                scan = {
+                    "operation": "FULL TABLE SCAN",
+                    "table": f"{obj_owner}.{obj_name}",
+                    "table_owner": obj_owner,
+                    "table_name": obj_name,
+                    "num_rows": num_rows,
                     "cost": cost,
-                    "why": f"Oracle is reading all {num_rows:,} rows instead of using an index",
-                    "causes": [],
-                    "fix": "",
-                    "estimated_improvement": ""
+                    "cardinality": cardinality,
+                    "available_indexes": [
+                        {
+                            "name": idx["index_name"],
+                            "columns": idx.get("columns", []),
+                            "type": idx.get("index_type"),
+                            "status": idx.get("status")
+                        } 
+                        for idx in available_indexes
+                    ],
+                    "available_index_count": len(available_indexes),
+                    "columns_in_where_clause": where_columns
                 }
                 
-                if not available_indexes:
-                    issue["causes"].append("No indexes exist on this table")
-                    if where_columns:
-                        issue["fix"] = f"CREATE INDEX idx_{obj_name.lower()}_{where_columns[0].lower()} ON {obj_owner}.{obj_name}({', '.join(where_columns[:3])})"
-                        issue["estimated_improvement"] = "Potential 90-99% reduction in execution time"
-                    else:
-                        issue["fix"] = f"Consider adding index on columns used in WHERE/JOIN clauses"
-                else:
-                    issue["causes"].append(f"{len(available_indexes)} index(es) exist but not being used")
-                    issue["causes"].append("Possible reasons: data type mismatch, function on column, OR conditions, LIKE with leading wildcard")
-                    if where_columns:
-                        issue["fix"] = f"Review existing indexes or create composite index: CREATE INDEX idx_{obj_name.lower()}_opt ON {obj_owner}.{obj_name}({', '.join(where_columns[:3])})"
-                    else:
-                        issue["fix"] = "Ensure WHERE clause predicates match index columns without functions"
-                    issue["estimated_improvement"] = "Potential 80-95% reduction in execution time"
-                
-                issues.append(issue)
-                dbg(f"⚠️ Full scan detected: {obj_owner}.{obj_name} ({num_rows:,} rows, severity={severity})")
+                scans.append(scan)
+                dbg(f"⚠️ Full scan detected: {obj_owner}.{obj_name} ({num_rows:,} rows)")
     
-    return issues
+    return scans
 
 
 def detect_anomalies(table_stats, plan_details):
     """
-    Detect data anomalies that might indicate problems.
-    Returns warnings for unusual patterns.
+    Detect data anomalies - reports facts about missing/stale statistics.
+    LLM will determine impact and recommendations.
     """
     dbg("-> detect_anomalies()")
     
@@ -1005,39 +983,30 @@ def detect_anomalies(table_stats, plan_details):
         
         if num_rows is None or num_rows == 0:
             anomalies.append({
-                "severity": "MEDIUM",
                 "type": "missing_statistics",
                 "table": f"{owner}.{name}",
-                "issue": "Table has no statistics or zero rows",
-                "impact": "Optimizer cannot make informed decisions - may choose inefficient plan",
-                "fix": f"EXEC DBMS_STATS.GATHER_TABLE_STATS('{owner}', '{name}')"
+                "table_owner": owner,
+                "table_name": name,
+                "num_rows": num_rows,
+                "last_analyzed": last_analyzed
             })
             dbg(f"⚠️ No statistics: {owner}.{name}")
-        elif last_analyzed:
-            # Check if statistics are stale (this would need date parsing)
-            # For now, just flag if last_analyzed is present
-            pass
     
-    # Check for extreme cardinality mismatches
+    # Check for extreme cardinality mismatches (if actual rows available)
     for step in plan_details:
         cardinality = step.get("cardinality", 0)
         actual_rows = step.get("actual_rows", 0)  # Only available with SQL Monitor
         
-        # If we have actual vs estimated (only in real execution)
         if actual_rows and cardinality:
             ratio = actual_rows / cardinality if cardinality > 0 else 0
             if ratio > 10 or (ratio < 0.1 and cardinality > 100):
                 anomalies.append({
-                    "severity": "HIGH",
                     "type": "cardinality_mismatch",
                     "step_id": step.get("id"),
                     "operation": step.get("operation"),
-                    "estimated": cardinality,
-                    "actual": actual_rows,
-                    "ratio": round(ratio, 2),
-                    "issue": "Significant difference between estimated and actual rows",
-                    "impact": "Optimizer made poor choices based on wrong estimates",
-                    "fix": "Gather fresh statistics or use extended statistics for correlated columns"
+                    "estimated_rows": cardinality,
+                    "actual_rows": actual_rows,
+                    "estimation_ratio": round(ratio, 2)
                 })
                 dbg(f"⚠️ Cardinality mismatch at step {step.get('id')}: {cardinality} est vs {actual_rows} actual")
     
@@ -1098,8 +1067,8 @@ def run_full_oracle_analysis(cur, sql_text: str):
     # Run all diagnostics
     partition_diagnostics = diagnose_partition_pruning(plan_details, part_tables, sql)
     query_intent = classify_query_intent(sql, plan_details)
-    cartesian_warnings = detect_cartesian_products(plan_details)
-    performance_issues = diagnose_performance_issues(plan_details, table_stats, index_stats, col_stats, sql)
+    cartesian_detections = detect_cartesian_products(plan_details)
+    full_table_scans = detect_full_table_scans(plan_details, table_stats, index_stats, col_stats, sql)
     anomalies = detect_anomalies(table_stats, plan_details)
 
     # Cleanup
@@ -1125,24 +1094,19 @@ def run_full_oracle_analysis(cur, sql_text: str):
         "segment_sizes": segment_sizes,
         "partition_diagnostics": partition_diagnostics,
         "query_intent": query_intent,
-        "cartesian_warnings": cartesian_warnings,
-        "performance_issues": performance_issues,
+        "full_table_scans": full_table_scans,
+        "cartesian_detections": cartesian_detections,
         "anomalies": anomalies,
-        "diagnostics_summary": {
-            "performance_issues_found": len(performance_issues),
-            "cartesian_products_detected": len(cartesian_warnings),
-            "anomalies_detected": len(anomalies),
-            "partition_issues": len(partition_diagnostics),
-            "total_severity_critical": sum(1 for i in performance_issues + cartesian_warnings if i.get("severity") == "CRITICAL"),
-            "total_severity_high": sum(1 for i in performance_issues + cartesian_warnings + partition_diagnostics if i.get("severity") == "HIGH"),
-        },
         "summary": {
             "tables": len(tables),
             "indexes": len(index_stats),
             "columns": len(col_stats),
             "constraints": len(constraints),
             "partitioned_tables": len(part_tables),
-            "partition_issues": len(partition_diagnostics)
+            "partition_issues": len(partition_diagnostics),
+            "full_scans_detected": len(full_table_scans),
+            "cartesian_detections": len(cartesian_detections),
+            "anomalies_detected": len(anomalies)
         }
     }
     

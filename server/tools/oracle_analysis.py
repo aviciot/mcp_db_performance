@@ -160,54 +160,40 @@ def analyze_oracle_query(db_name: str, sql_text: str):
             facts["historical_context"] = {"status": "new_query", "message": "First execution - establishing baseline"}
             result["prompt"] = f"🆕 This is the first execution of this query pattern. {result.get('prompt', '')}"
         
-        # Build smart prompt with diagnostics summary
-        diagnostics_summary = facts.get("diagnostics_summary", {})
+        # Add factual summary for LLM context
         query_intent = facts.get("query_intent", {})
-        performance_issues = facts.get("performance_issues", [])
-        cartesian_warnings = facts.get("cartesian_warnings", [])
+        full_table_scans = facts.get("full_table_scans", [])
+        cartesian_detections = facts.get("cartesian_detections", [])
         
-        # Build contextual prompt
+        # Build informational prompt (no recommendations)
         prompt_parts = [result.get("prompt", "")]
         
-        # Add query intent context
+        # Add query pattern info
         if query_intent:
             prompt_parts.append(
-                f"\n📋 QUERY INTENT: This is a '{query_intent.get('type', 'unknown')}' query "
+                f"\n📋 Query Pattern: '{query_intent.get('type', 'unknown')}' "
                 f"(complexity: {query_intent.get('complexity', 'unknown')}). "
-                f"Typical use: {query_intent.get('typical_use', 'N/A')}."
             )
         
-        # Add performance diagnostics context
-        if performance_issues:
-            critical_count = sum(1 for i in performance_issues if i.get("severity") == "CRITICAL")
-            high_count = sum(1 for i in performance_issues if i.get("severity") == "HIGH")
-            
-            if critical_count > 0:
-                prompt_parts.append(
-                    f"\n🚨 CRITICAL: {critical_count} critical performance issue(s) detected! "
-                    f"Review facts['performance_issues'] for detailed diagnostics with fix recommendations."
-                )
-            elif high_count > 0:
-                prompt_parts.append(
-                    f"\n⚠️ WARNING: {high_count} high-severity performance issue(s) found. "
-                    f"Review facts['performance_issues'] for optimization opportunities."
-                )
-        
-        # Add Cartesian product warnings
-        if cartesian_warnings:
+        # Add detection summary
+        if full_table_scans:
             prompt_parts.append(
-                f"\n🔥 ALERT: {len(cartesian_warnings)} Cartesian product(s) detected! "
-                f"This will produce exponential row growth. See facts['cartesian_warnings'] for details."
+                f"\n🔍 Detected: {len(full_table_scans)} full table scan(s). "
+                f"See facts['full_table_scans'] for details."
             )
         
-        # Suggest business logic tool
+        if cartesian_detections:
+            prompt_parts.append(
+                f"\n🔍 Detected: {len(cartesian_detections)} potential Cartesian product(s). "
+                f"See facts['cartesian_detections'] for details."
+            )
+        
+        # Inform about business logic tool availability
         tables_count = facts.get("summary", {}).get("tables", 0)
         if tables_count > 1:
             prompt_parts.append(
-                f"\n💡 TIP: To understand the BUSINESS PURPOSE of this query (what it does, not just performance), "
-                f"use the 'explain_business_logic' tool. It will analyze table relationships, "
-                f"infer business domains, and explain the query in plain English. "
-                f"Cached lookups make it very fast (~700ms)."
+                f"\n💡 Note: For business context analysis, the 'explain_business_logic' tool "
+                f"can analyze table relationships and infer business domains."
             )
         
         result["prompt"] = "".join(prompt_parts)
