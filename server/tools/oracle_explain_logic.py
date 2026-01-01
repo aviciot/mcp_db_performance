@@ -532,7 +532,7 @@ async def explain_oracle_query_logic(
         relationships = []
         if knowledge_db:
             for owner, table in tables:
-                rels = knowledge_db.get_relationships_for_table(owner, table)
+                rels = knowledge_db.get_relationships_for_table(db_name, owner, table)
                 for rel in rels:
                     relationships.append({
                         "from": (rel["from_schema"], rel["from_table"]),
