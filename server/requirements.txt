@@ -5,4 +5,5 @@ pyyaml
 starlette
 uvicorn
 httpx
-pydanticpsycopg2-binary
+pydantic
+psycopg2-binary
