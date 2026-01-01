@@ -118,10 +118,12 @@ class KnowledgeDB:
         Returns None if not cached or cache is stale.
         """
         if not self.is_enabled:
+            logger.debug(f"🔌 Knowledge DB not enabled, skipping cache lookup")
             return None
             
         with self._cursor() as cur:
             if cur is None:
+                logger.warning(f"⚠️ No database cursor available")
                 return None
                 
             cur.execute("""
@@ -131,7 +133,12 @@ class KnowledgeDB:
             """, (db_name, owner.upper(), table_name.upper(), self.TABLE_CACHE_TTL_DAYS))
             
             row = cur.fetchone()
-            return dict(row) if row else None
+            if row:
+                logger.info(f"💾 PostgreSQL cache: Found {owner}.{table_name} (refreshed: {row.get('last_refreshed', 'unknown')})")
+                return dict(row)
+            else:
+                logger.debug(f"💾 PostgreSQL cache: No entry for {owner}.{table_name}")
+                return None
     
     def get_tables_knowledge_batch(
         self, 

@@ -406,6 +406,7 @@ def explain_business_logic(
             explain_oracle_query_logic(
                 sql=sql_text,
                 oracle_cursor=cur,
+                db_name=db_name,
                 knowledge_db=knowledge_db,
                 default_schema=default_schema,
                 follow_relationships=follow_relationships,

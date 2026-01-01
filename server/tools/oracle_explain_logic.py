@@ -158,6 +158,7 @@ def resolve_table_schemas(
 
 def get_cached_context(
     knowledge_db,
+    db_name: str,
     tables: List[Tuple[str, str]]
 ) -> Tuple[Dict[Tuple[str, str], Dict], List[Tuple[str, str]]]:
     """
@@ -170,26 +171,34 @@ def get_cached_context(
     cached = {}
     uncached = []
     
+    logger.info(f"🔍 Checking PostgreSQL cache for {len(tables)} tables...")
+    
     for owner, table in tables:
-        knowledge = knowledge_db.get_table_knowledge(owner, table)
+        knowledge = knowledge_db.get_table_knowledge(db_name, owner, table)
         if knowledge:
             # Convert to context format
             cached[(owner, table)] = {
                 "owner": owner,
                 "table_name": table,
-                "comment": knowledge.get("table_comment"),
+                "comment": knowledge.get("oracle_comment"),
                 "columns": knowledge.get("columns", []),
                 "primary_key": knowledge.get("primary_key_columns", []),
-                "row_count": knowledge.get("row_count"),
+                "row_count": knowledge.get("num_rows"),
                 "is_lookup": knowledge.get("is_lookup_table", False),
                 "inferred_entity_type": knowledge.get("inferred_entity_type"),
                 "inferred_domain": knowledge.get("inferred_domain"),
+                "business_description": knowledge.get("business_description"),  # Admin docs
                 "cached": True
             }
-            logger.debug(f"📦 Cache HIT: {owner}.{table}")
+            logger.info(f"📦 CACHE HIT: {owner}.{table} (from PostgreSQL)")
         else:
             uncached.append((owner, table))
-            logger.debug(f"📭 Cache MISS: {owner}.{table}")
+            logger.info(f"📭 CACHE MISS: {owner}.{table} (will query Oracle)")
+    
+    if cached:
+        logger.info(f"✅ Found {len(cached)} tables in cache, {len(uncached)} need Oracle lookup")
+    else:
+        logger.info(f"📭 No cached data found, will fetch all {len(uncached)} tables from Oracle")
     
     return cached, uncached
 
@@ -439,6 +448,7 @@ def build_relationship_graph(context: Dict[str, Any]) -> Dict[str, Any]:
 async def explain_oracle_query_logic(
     sql: str,
     oracle_cursor,
+    db_name: str = "unknown",
     knowledge_db = None,
     default_schema: Optional[str] = None,
     follow_relationships: bool = True,
@@ -451,6 +461,7 @@ async def explain_oracle_query_logic(
     Args:
         sql: The SQL query to explain
         oracle_cursor: Active Oracle cursor
+        db_name: Database name (for caching)
         knowledge_db: Optional KnowledgeDB instance for caching
         default_schema: Default schema if tables don't specify one
         follow_relationships: Whether to follow FK relationships
@@ -491,10 +502,9 @@ async def explain_oracle_query_logic(
     uncached_tables = tables
     
     if use_cache and knowledge_db:
-        cached_context, uncached_tables = get_cached_context(knowledge_db, tables)
+        cached_context, uncached_tables = get_cached_context(knowledge_db, db_name, tables)
         stats["cache_hits"] = len(cached_context)
         stats["cache_misses"] = len(uncached_tables)
-        logger.info(f"📦 Cache: {len(cached_context)} hits, {len(uncached_tables)} misses")
     
     # Step 4: Collect context from Oracle for uncached tables
     if uncached_tables:
