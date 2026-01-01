@@ -186,7 +186,202 @@ MySQL-specific plan comparison:
 
 ---
 
+### 7. `explain_business_logic(db_name, sql_text, follow_relationships, max_depth)` ⭐ NEW
+
+**AI-Powered Business Logic Explanation with PostgreSQL Caching**
+
+Understands the business purpose behind your SQL queries by analyzing table relationships, column semantics, and data patterns. Perfect for onboarding new team members or documenting complex queries.
+
+**What It Does:**
+- 📊 **Extracts all tables** from your SQL query
+- 🔗 **Follows foreign key relationships** up to N levels deep (default: 2)
+- 🧠 **Infers business meaning** from table/column names and comments
+- 🎨 **Generates Mermaid ER diagrams** showing relationships
+- 💾 **Caches metadata in PostgreSQL** for 14x faster subsequent queries
+- 🔍 **Filters out system tables** (V$, DBA_, ALL_, SYS schema)
+
+**Parameters:**
+- `db_name` (required) - Oracle database name
+- `sql_text` (required) - SQL query to analyze
+- `follow_relationships` (optional, default: true) - Follow FK relationships
+- `max_depth` (optional, default: 2) - Relationship depth to traverse
+
+**Returns:**
+```json
+{
+  "tables": [
+    {
+      "schema": "GTW_ODS",
+      "name": "GATEWAY_TRANSACTIONS",
+      "row_count": 45000000,
+      "comment": "Credit card transaction processing",
+      "table_type": "business",
+      "inferred_entity": "Transaction",
+      "inferred_domain": "Payment Processing",
+      "columns": [
+        {
+          "name": "PAYMENT_ID",
+          "type": "VARCHAR2(50)",
+          "comment": "Unique payment identifier",
+          "nullable": false
+        }
+      ],
+      "primary_key": ["PAYMENT_ID"]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "GTW_TRANS_RETRY",
+      "to": "GATEWAY_TRANSACTIONS",
+      "columns": ["PAYMENT_ID"],
+      "type": "FK"
+    }
+  ],
+  "graph": {
+    "mermaid": "erDiagram\n  GATEWAY_TRANSACTIONS ||--o{ GTW_TRANS_RETRY : retries\n"
+  },
+  "stats": {
+    "cache_hits": 4,
+    "cache_misses": 0,
+    "duration_ms": 742
+  }
+}
+```
+
+**Usage Examples:**
+
+**Example 1: Simple Query Analysis**
+```
+User: "Explain the business logic of this query:
+SELECT * FROM customer_orders WHERE order_date > '2024-01-01'"
+
+Result:
+- Analyzes CUSTOMER_ORDERS table
+- Identifies it as a transaction table
+- Shows it relates to CUSTOMERS (FK: customer_id)
+- Shows it relates to ORDER_ITEMS (FK: order_id)
+- Infers domain: "Order Management"
+- Generates ER diagram with relationships
+```
+
+**Example 2: Complex Join with Relationships**
+```
+User: "What does this query do?
+SELECT t.*, r.retry_count, c.challenge_status
+FROM gateway_transactions t
+LEFT JOIN gtw_trans_retry r ON t.payment_id = r.payment_id
+LEFT JOIN gtw_trans_3ds_challenge c ON t.payment_id = c.payment_id
+WHERE t.processing_date = '2024-01-01'"
+
+Result:
+- Main table: GATEWAY_TRANSACTIONS (45M rows, "Transaction" entity)
+- Related: GTW_TRANS_RETRY (retry tracking, lookup table)
+- Related: GTW_TRANS_3DS_CHALLENGE (3DS authentication, operational table)
+- Business purpose: "Payment transaction processing with retry logic and 3DS authentication"
+- Performance: 742ms (all from cache on 2nd run)
+```
+
+**Example 3: Deep Relationship Discovery**
+```
+User: "Analyze this query and show me all related tables:
+SELECT * FROM orders WHERE customer_id = 12345"
+
+With follow_relationships=true, max_depth=2:
+- Level 0: ORDERS table
+- Level 1: CUSTOMERS, ORDER_ITEMS, SHIPMENTS (direct FKs)
+- Level 2: ADDRESSES, PRODUCTS, SHIPPING_CARRIERS (related to level 1)
+- Generates complete ER diagram
+```
+
+**Performance:**
+- **First run**: ~10-12 seconds (collects from Oracle + caches)
+- **Second run**: ~0.7 seconds (reads from PostgreSQL cache)
+- **Cache TTL**: 7 days (configurable)
+- **93% faster** with caching enabled
+
+**Cache Management:**
+- Automatic caching to PostgreSQL (omni database)
+- Timestamps track freshness
+- Admin can override with custom documentation
+- Cache invalidates after 7 days
+
+**What Gets Cached:**
+- Table metadata (name, row count, comments)
+- Column details (names, types, comments, nullability)
+- Primary keys
+- Foreign key relationships
+- Inferred business semantics
+- Domain classifications
+
+**System Table Filtering:**
+Automatically excludes:
+- Oracle system views: `V$%`, `DBA_%`, `ALL_%`, `USER_%`
+- System schema: `SYS`, `SYSTEM`, `DBSNMP`
+- Audit/log tables: `%_LOG`, `%_HIST`, `%_AUDIT`
+- Temporary tables: `%_TEMP`, `%_TMP`
+- CTEs and inline views
+
+**Example Output:**
+```
+📊 Business Logic Analysis
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 Query Purpose:
+This query retrieves payment transactions with their retry attempts and 
+3DS authentication challenges for a specific processing date.
+
+📦 Tables Analyzed (4):
+┌─────────────────────────────────────────────────────────────────┐
+│ GTW_ODS.GATEWAY_TRANSACTIONS_FULL_EMERGENCY                     │
+│ Type: Business | Rows: 45M | Entity: Transaction               │
+│ Purpose: Main payment transaction processing table              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ GTW_ODS.GTW_TRANS_RETRY                                         │
+│ Type: Operational | Rows: 2.3M | Entity: Retry                 │
+│ Purpose: Tracks payment retry attempts                          │
+└─────────────────────────────────────────────────────────────────┘
+
+🔗 Relationships (2):
+• GTW_TRANS_RETRY ──FK──> GATEWAY_TRANSACTIONS (payment_id)
+• GTW_TRANS_3DS_CHALLENGE ──FK──> GATEWAY_TRANSACTIONS (payment_id)
+
+🎯 Domain: Payment Processing
+💾 Cache: 4 hits, 0 misses | Duration: 742ms
+```
+
+---
+
+### 8. `get_table_business_context(db_name, tables)`
+
+Get business context for specific tables without analyzing a full query.
+
+**Parameters:**
+- `db_name` (required) - Database name
+- `tables` (required) - List of fully-qualified table names (e.g., "SCHEMA.TABLE")
+
+**Returns:** Same structure as `explain_business_logic` but for specified tables only.
+
+**Example:**
+```
+get_table_business_context("transformer_master", 
+  ["GTW_ODS.GATEWAY_TRANSACTIONS", "GTW_ODS.GTW_TRANS_RETRY"])
+```
+
+---
+
 ## 🆕 What's New in This Version
+
+### Business Logic Explanation (Oracle) ⭐ NEW
+- ✅ AI-powered query business logic inference
+- ✅ Automatic table relationship discovery (2 levels deep)
+- ✅ PostgreSQL caching with 7-day TTL (93% faster on cache hits)
+- ✅ System table filtering (V$, DBA_, SYS schema)
+- ✅ Mermaid ER diagram generation
+- ✅ Entity and domain classification
+- ✅ Column semantics analysis
+- ✅ Admin documentation override capability
 
 ### Performance Monitoring (Oracle)
 - ✅ Real-time database health monitoring (CPU, memory, sessions, cache)
