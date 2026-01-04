@@ -989,20 +989,32 @@ This query retrieves payment transactions with their retry attempts and
 
 ---
 
-### 8. `get_table_business_context(db_name, tables)`
+### 8. `get_table_business_context(db_name, table_names, follow_relationships, max_depth)`
 
-Get business context for specific tables without analyzing a full query.
+**[ORACLE ONLY]** Get business context for specific tables without analyzing a full query.
 
 **Parameters:**
-- `db_name` (required) - Database name
-- `tables` (required) - List of fully-qualified table names (e.g., "SCHEMA.TABLE")
+- `db_name` (required) - Oracle database name
+- `table_names` (required) - Comma-separated table names (e.g., "SCHEMA.TABLE1, SCHEMA.TABLE2")
+- `follow_relationships` (optional, default=true) - Whether to follow foreign key relationships
+- `max_depth` (optional, default=1) - How many levels deep to follow relationships
 
-**Returns:** Same structure as `explain_business_logic` but for specified tables only.
+**Returns:**
+- Table comments and descriptions
+- Column metadata with descriptions
+- Foreign key relationships (discovered recursively)
+- Primary keys and unique constraints
+- Related tables up to max_depth levels
+- Results are cached for fast lookups
 
 **Example:**
 ```
-get_table_business_context("transformer_master", 
-  ["GTW_ODS.GATEWAY_TRANSACTIONS", "GTW_ODS.GTW_TRANS_RETRY"])
+get_table_business_context(
+  "transformer_master", 
+  "GTW_ODS.GATEWAY_TRANSACTIONS, GTW_ODS.GTW_TRANS_RETRY",
+  true,
+  2
+)
 ```
 
 ---
