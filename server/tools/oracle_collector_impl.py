@@ -1018,6 +1018,10 @@ def detect_anomalies(table_stats, plan_details):
 # ============================================================
 
 def run_full_oracle_analysis(cur, sql_text: str):
+    import time
+    from config import config
+    
+    start_time = time.time()
     dbg("===== START ANALYSIS =====")
 
     sql = normalize_sql(sql_text)
@@ -1055,20 +1059,47 @@ def run_full_oracle_analysis(cur, sql_text: str):
     tables = sorted(list(tables_set))
     dbg("Tables to fetch metadata for:", tables)
 
-    table_stats = get_table_stats(cur, tables)
-    index_stats = get_index_stats(cur, tables)
-    index_cols = get_index_columns(cur, tables)
-    part_tables, part_keys = get_partition_info(cur, tables)
-    col_stats = get_column_stats(cur, tables, sql_cols)
-    constraints = get_constraints(cur, tables)
-    optimizer_params = get_optimizer_parameters(cur)
-    segment_sizes = get_segment_sizes(cur, tables)
+    # === PRESET-BASED EARLY FILTERING ===
+    preset = config.output_preset
+    dbg(f"Using preset: {preset}")
     
-    # Run all diagnostics
-    partition_diagnostics = diagnose_partition_pruning(plan_details, part_tables, sql)
+    # Always collect: table stats, plan details
+    table_stats = get_table_stats(cur, tables)
+    
+    # Conditional collection based on preset
+    if preset == "minimal":
+        dbg("MINIMAL preset: Skipping indexes, columns, constraints, partitions, optimizer, segments")
+        index_stats = []
+        index_cols = []
+        part_tables, part_keys = [], []
+        col_stats = []
+        constraints = []
+        optimizer_params = {}
+        segment_sizes = []
+    elif preset == "compact":
+        dbg("COMPACT preset: Collecting most metadata, skipping segments")
+        index_stats = get_index_stats(cur, tables)
+        index_cols = get_index_columns(cur, tables)
+        part_tables, part_keys = get_partition_info(cur, tables)
+        col_stats = get_column_stats(cur, tables, sql_cols)
+        constraints = get_constraints(cur, tables)
+        optimizer_params = get_optimizer_parameters(cur)
+        segment_sizes = []  # Skip physical storage
+    else:  # standard
+        dbg("STANDARD preset: Collecting full metadata")
+        index_stats = get_index_stats(cur, tables)
+        index_cols = get_index_columns(cur, tables)
+        part_tables, part_keys = get_partition_info(cur, tables)
+        col_stats = get_column_stats(cur, tables, sql_cols)
+        constraints = get_constraints(cur, tables)
+        optimizer_params = get_optimizer_parameters(cur)
+        segment_sizes = get_segment_sizes(cur, tables)
+    
+    # Run diagnostics (always, but use available data)
+    partition_diagnostics = diagnose_partition_pruning(plan_details, part_tables, sql) if part_tables else []
     query_intent = classify_query_intent(sql, plan_details)
     cartesian_detections = detect_cartesian_products(plan_details)
-    full_table_scans = detect_full_table_scans(plan_details, table_stats, index_stats, col_stats, sql)
+    full_table_scans = detect_full_table_scans(plan_details, table_stats, index_stats, col_stats, sql) if index_stats else []
     anomalies = detect_anomalies(table_stats, plan_details)
 
     # Cleanup
@@ -1111,16 +1142,40 @@ def run_full_oracle_analysis(cur, sql_text: str):
     }
     
     # Apply output filtering based on preset
-    from config import config
     plan_tables_set = set(plan_objs["tables"])
     plan_indexes_set = set(plan_objs["indexes"])
-    filtered_facts = apply_output_preset(full_facts, config.output_preset, plan_tables_set, plan_indexes_set)
+    filtered_facts = apply_output_preset(full_facts, preset, plan_tables_set, plan_indexes_set)
+    
+    # Calculate elapsed time
+    elapsed = time.time() - start_time
+    
+    # Build informative prompt with counts and timing
+    prompt_parts = [f"✓ Oracle analysis complete in {elapsed:.2f}s"]
+    prompt_parts.append(f"Preset: {preset}")
+    prompt_parts.append(f"Tables: {len(tables)}")
+    
+    if index_stats:
+        prompt_parts.append(f"Indexes: {len(index_stats)}")
+    if constraints:
+        prompt_parts.append(f"Constraints: {len(constraints)}")
+    if col_stats:
+        prompt_parts.append(f"Columns: {len(col_stats)}")
+    
+    # Add warnings
+    warnings = []
+    if full_table_scans:
+        warnings.append(f"⚠️ {len(full_table_scans)} full table scans")
+    if cartesian_detections:
+        warnings.append(f"⚠️ {len(cartesian_detections)} cartesian products")
+    if anomalies:
+        warnings.append(f"⚠️ {len(anomalies)} anomalies")
+    
+    if warnings:
+        prompt_parts.append(" | ".join(warnings))
     
     return {
         "facts": filtered_facts,
-        "prompt":
-            f"Oracle analysis ready. SQL length={len(sql)}, tables={len(tables)}, "
-            f"constraints={len(constraints)}, partition_issues={len(partition_diagnostics)}."
+        "prompt": " | ".join(prompt_parts)
     }
 
 
