@@ -99,9 +99,62 @@ Side-by-side execution plan comparison for both Oracle and MySQL.
 
 ---
 
+### Diagnostic Tools
+
+### 4. `check_oracle_access(db_name)`
+
+**[ORACLE ONLY]** Check Oracle user permissions and data dictionary access.
+
+**Checks:**
+- ALL_TABLES, ALL_INDEXES, ALL_IND_COLUMNS (critical)
+- ALL_CONSTRAINTS, ALL_TAB_COLUMNS (important)
+- ALL_TAB_PARTITIONS (helpful)
+- DBA_SEGMENTS (storage analysis - requires DBA role)
+- V$PARAMETER (optimizer settings)
+- EXPLAIN PLAN capability (PLAN_TABLE)
+
+**Returns:**
+- Access report (✓ accessible / ✗ blocked with error)
+- Impact score (0-10)
+- Impact level (HIGH/MEDIUM/LOW)
+- Analysis capability breakdown
+- Specific recommendations for missing permissions
+
+**Example:**
+```
+check_oracle_access("transformer_master")
+```
+
+---
+
+### 5. `check_mysql_access(db_name)`
+
+**[MYSQL ONLY]** Check MySQL user permissions and schema access.
+
+**Checks:**
+- information_schema.TABLES (critical)
+- information_schema.STATISTICS (critical)
+- information_schema.COLUMNS (helpful)
+- performance_schema.table_io_waits_summary_by_index_usage (important)
+- EXPLAIN capability
+
+**Returns:**
+- Access report (✓ accessible / ✗ blocked with error)
+- Impact score (0-10)
+- Impact level (HIGH/MEDIUM/LOW)
+- Analysis capability breakdown
+- Specific recommendations for missing permissions
+
+**Example:**
+```
+check_mysql_access("mysql_devdb03_avi")
+```
+
+---
+
 ### Performance Monitoring Tools (Oracle)
 
-### 4. `get_database_health(db_name, time_range_minutes)`
+### 6. `get_database_health(db_name, time_range_minutes)`
 
 Real-time Oracle database health monitoring.
 
@@ -119,7 +172,7 @@ get_database_health("transformer_master", 5)
 
 ---
 
-### 5. `get_top_queries(db_name, metric, top_n, time_range_hours, exclude_sys, schema_filter, module_filter)`
+### 7. `get_top_queries(db_name, metric, top_n, time_range_hours, exclude_sys, schema_filter, module_filter)`
 
 Retrieve top queries by performance metric.
 
@@ -142,7 +195,7 @@ Retrieve top queries by performance metric.
 
 ---
 
-### 6. `get_performance_trends(db_name, metric, hours_back, interval_minutes)`
+### 8. `get_performance_trends(db_name, metric, hours_back, interval_minutes)`
 
 Historical performance trends with JSON chart data.
 

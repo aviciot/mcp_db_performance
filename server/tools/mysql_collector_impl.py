@@ -515,37 +515,52 @@ def run_collector(cursor, sql: str) -> dict:
     Returns:
         Dict with facts and prompt
     """
+    import time
+    from config import config
+    
+    start_time = time.time()
     logger.info("[MYSQL-COLLECTOR] ===== START ANALYSIS =====")
     
     facts = {}
+    preset = config.output_preset
+    logger.info(f"[MYSQL-COLLECTOR] Using preset: {preset}")
     
-    # 1. Run EXPLAIN
+    # 1. Run EXPLAIN (always)
     plan_json = run_explain(cursor, sql)
     facts["plan_json"] = plan_json
     
-    # 2. Extract plan details
+    # 2. Extract plan details (always)
     plan_details = extract_plan_details(plan_json)
     facts["plan_details"] = plan_details
     
-    # 3. Extract table names
+    # 3. Extract table names (always)
     tables = extract_tables_from_sql(sql)
     logger.info(f"[MYSQL-COLLECTOR] Tables found: {tables}")
     
-    # 4. Get table statistics
+    # 4. Get table statistics (always)
     if tables:
         table_stats = get_table_stats(cursor, tables)
         facts["table_stats"] = table_stats
         
-        # 5. Get index statistics
-        index_stats = get_index_stats(cursor, tables)
+        # === PRESET-BASED EARLY FILTERING ===
+        if preset == "minimal":
+            logger.info("[MYSQL-COLLECTOR] MINIMAL preset: Skipping indexes, usage stats, duplicate detection")
+            index_stats = []
+            index_usage = []
+            duplicate_indexes = []
+        elif preset == "compact":
+            logger.info("[MYSQL-COLLECTOR] COMPACT preset: Collecting indexes + usage, skipping duplicate detection")
+            index_stats = get_index_stats(cursor, tables)
+            index_usage = get_index_usage_stats(cursor, tables)
+            duplicate_indexes = []  # Skip duplicate detection
+        else:  # standard
+            logger.info("[MYSQL-COLLECTOR] STANDARD preset: Collecting full metadata")
+            index_stats = get_index_stats(cursor, tables)
+            index_usage = get_index_usage_stats(cursor, tables)
+            duplicate_indexes = get_duplicate_indexes(cursor, tables)
+        
         facts["index_stats"] = index_stats
-        
-        # 6. Get index usage statistics (from performance_schema)
-        index_usage = get_index_usage_stats(cursor, tables)
         facts["index_usage"] = index_usage
-        
-        # 7. Detect duplicate indexes
-        duplicate_indexes = get_duplicate_indexes(cursor, tables)
         facts["duplicate_indexes"] = duplicate_indexes
     else:
         facts["table_stats"] = []
@@ -555,7 +570,24 @@ def run_collector(cursor, sql: str) -> dict:
     
     logger.info("[MYSQL-COLLECTOR] ===== ANALYSIS COMPLETE =====")
     
+    # Calculate elapsed time
+    elapsed = time.time() - start_time
+    
+    # Build informative prompt with counts and timing
+    prompt_parts = [f"✓ MySQL analysis complete in {elapsed:.2f}s"]
+    prompt_parts.append(f"Preset: {preset}")
+    prompt_parts.append(f"Tables: {len(tables)}")
+    
+    if facts["index_stats"]:
+        prompt_parts.append(f"Indexes: {len(facts['index_stats'])}")
+    if facts["index_usage"]:
+        unused_count = sum(1 for idx in facts['index_usage'] if idx.get('index_usage_count', 0) == 0)
+        if unused_count:
+            prompt_parts.append(f"⚠️ {unused_count} unused indexes")
+    if facts["duplicate_indexes"]:
+        prompt_parts.append(f"⚠️ {len(facts['duplicate_indexes'])} duplicate indexes")
+    
     return {
         "facts": facts,
-        "prompt": f"MySQL analysis ready. SQL length={len(sql)}, tables={len(tables)}, plan_steps={len(plan_details)}"
+        "prompt": " | ".join(prompt_parts)
     }
