@@ -21,96 +21,107 @@
 ### Phase 1: Foundation (Week 1)
 **Goal**: Set up project infrastructure and core architecture  
 **Duration**: 5 days  
-**Status**: 🏗️ In Progress
+**Status**: ✅ Complete
 
 #### Tasks
 - [x] Create design document (DESIGN.md)
 - [x] Create architecture document (ARCHITECTURE.md)
-- [ ] Create roadmap (this document)
-- [ ] Initialize backend project structure
-- [ ] Initialize frontend project structure
-- [ ] Set up Docker Compose configuration
-- [ ] Design database schema (admin tables)
-- [ ] Create Alembic migrations
-- [ ] Set up development environment
-- [ ] Configure ESLint, Prettier, pre-commit hooks
+- [x] Create roadmap (this document)
+- [x] Initialize backend project structure
+- [x] Initialize frontend project structure
+- [x] Set up Docker Compose configuration
+- [x] Design database schema (admin tables)
+- [x] Create Alembic migrations
+- [x] Set up development environment
+- [x] Configure ESLint, Prettier, pre-commit hooks
 
 **Deliverables**:
 - ✅ Project documentation (DESIGN.md, ARCHITECTURE.md, ROADMAP.md)
-- 📦 Backend scaffolding (FastAPI + SQLAlchemy)
-- 📦 Frontend scaffolding (Next.js 14 + TypeScript)
-- 🐳 docker-compose.yml for all services
-- 🗄️ Database migrations ready
-- ⚙️ Development environment working
+- ✅ Backend scaffolding (FastAPI + SQLAlchemy)
+- ✅ Frontend scaffolding (Next.js 14 + TypeScript)
+- ✅ docker-compose.yml for all services
+- ✅ Database migrations ready
+- ✅ Development environment working
 
 ---
 
 ### Phase 2: Authentication & Authorization (Week 2)
 **Goal**: Implement secure authentication system  
 **Duration**: 5 days  
-**Status**: ⏳ Not Started
+**Status**: ✅ Complete
 
 #### Backend Tasks
-- [ ] Implement password hashing (bcrypt)
-- [ ] Create JWT token generation/validation
-- [ ] Build login endpoint (/api/v1/auth/login)
-- [ ] Build logout endpoint (/api/v1/auth/logout)
-- [ ] Build token refresh endpoint (/api/v1/auth/refresh)
-- [ ] Build "get current user" endpoint (/api/v1/auth/me)
-- [ ] Implement auth middleware
-- [ ] Implement role-based authorization
-- [ ] Add rate limiting (5 attempts/min for login)
-- [ ] Create seed script for admin user
+- [x] Implement password hashing (bcrypt)
+- [x] Create JWT token generation/validation
+- [x] Build login endpoint (/api/v1/auth/login)
+- [x] Build logout endpoint (/api/v1/auth/logout)
+- [x] Build token refresh endpoint (/api/v1/auth/refresh)
+- [x] Build "get current user" endpoint (/api/v1/auth/me)
+- [x] Implement auth middleware
+- [x] Implement role-based authorization
+- [x] Add rate limiting (5 attempts/min for login)
+- [x] Create seed script for admin user
 
 #### Frontend Tasks
-- [ ] Build login page UI
-- [ ] Implement auth context/store (Zustand)
-- [ ] Build protected route wrapper
-- [ ] Implement token refresh logic
-- [ ] Add auth interceptor for API calls
-- [ ] Create logout functionality
-- [ ] Handle session expiry gracefully
+- [x] Build login page UI
+- [x] Implement auth context/store (Zustand)
+- [x] Build protected route wrapper
+- [x] Implement token refresh logic
+- [x] Add auth interceptor for API calls
+- [x] Create logout functionality
+- [x] Handle session expiry gracefully
+- [x] Fix auth persistence (prevent logout on F5 refresh)
 
 **Deliverables**:
-- 🔐 Secure authentication system
-- 🔑 JWT-based authorization
-- 🚪 Login/logout flow working
-- 👤 Admin user seeded in database
+- ✅ Secure authentication system
+- ✅ JWT-based authorization
+- ✅ Login/logout flow working
+- ✅ Admin user seeded in database
 - ✅ All auth tests passing
+- ✅ Auth persists across page refreshes
 
 ---
 
 ### Phase 3: Dashboard Core (Week 2-3)
 **Goal**: Build main dashboard with key metrics  
 **Duration**: 5 days  
-**Status**: ⏳ Not Started
+**Status**: ✅ Complete
 
 #### Backend Tasks
-- [ ] Create dashboard stats endpoint (/api/v1/dashboard/stats)
-- [ ] Create activity feed endpoint (/api/v1/dashboard/activity)
-- [ ] Create chart data endpoint (/api/v1/dashboard/charts)
-- [ ] Optimize queries with indexes
-- [ ] Create database views (v_dashboard_stats, v_mcp_performance)
-- [ ] Add caching for expensive queries (if needed)
+- [x] Create dashboard stats endpoint (/api/v1/dashboard/stats)
+- [x] Create activity feed endpoint (/api/v1/dashboard/activity)
+- [x] Create chart data endpoint (/api/v1/dashboard/charts)
+- [x] Optimize queries with indexes
+- [x] Fix database models to match Omni2 schema
+- [x] Re-enable cost tracking with cost_estimate column
+- [x] Add caching for expensive queries (if needed)
 
 #### Frontend Tasks
-- [ ] Build dashboard layout (sidebar + header)
-- [ ] Build hero stats cards (4 metrics)
-- [ ] Build activity feed component (real-time ready)
-- [ ] Build query/hour chart (Recharts)
-- [ ] Build cost by MCP chart (Recharts)
-- [ ] Build MCP health status grid
-- [ ] Implement dark/light theme toggle
-- [ ] Add loading skeletons
-- [ ] Make responsive (mobile/tablet/desktop)
-- [ ] Add animations (Framer Motion)
+- [x] Build dashboard layout (sidebar + header)
+- [x] Build hero stats cards (4 metrics)
+- [x] Build activity feed component (real-time ready)
+- [x] Build query/hour chart (Recharts)
+- [x] Build cost by MCP chart (Recharts)
+- [x] Build MCP health status grid
+- [x] Implement dark/light theme toggle
+- [x] Add loading skeletons
+- [x] Make responsive (mobile/tablet/desktop)
+- [x] Add animations (Framer Motion)
 
 **Deliverables**:
-- 📊 Dashboard showing live stats
-- 📈 Charts visualizing data
-- 🎨 Beautiful, responsive UI
-- 🌗 Dark/light theme working
-- ⚡ Smooth animations
+- ✅ Dashboard showing live stats (4 MCPs, 11 users, 12 API calls)
+- ✅ Charts visualizing data
+- ✅ Beautiful, responsive UI
+- ✅ Dark/light theme working
+- ✅ Smooth animations
+- ✅ Real activity feed with 10+ items
+- ✅ Cost tracking functional
+
+**Critical Fixes Applied**:
+- Fixed User model: `username` → `name`, added 11 missing fields (slack_user_id, is_super_admin, etc.)
+- Fixed AuditLog model: Added 20+ missing columns (cost_estimate, tokens_cached, databases_accessed, etc.)
+- Re-enabled cost calculation using correct cost_estimate column
+- Fixed auth store to prevent logout on page refresh
 
 ---
 
