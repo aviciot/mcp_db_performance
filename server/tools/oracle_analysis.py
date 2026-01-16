@@ -425,6 +425,8 @@ async def explain_business_logic(
         # Get knowledge DB for caching (optional - works without it)
         try:
             knowledge_db = get_knowledge_db()
+            if knowledge_db and not knowledge_db.is_enabled:
+                await knowledge_db.connect()
             logger.info("📦 Knowledge DB connected for caching")
         except Exception as e:
             logger.warning(f"⚠️ Knowledge DB not available: {e}")
