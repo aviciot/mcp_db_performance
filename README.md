@@ -28,27 +28,41 @@ Transform complex SQL queries into clear business insights using AI-powered anal
 
 ## 🚀 Quick Start
 
-### 1. Clone and Configure
+### Automated Deployment (Recommended)
 
 ```bash
 git clone https://github.com/aviciot/mcp_db_performance.git
 cd mcp_db_peformance
+
+# Edit configuration files
 cp server/config/settings.template.yaml server/config/settings.yaml
 # Edit settings.yaml with your database credentials
+
+# Run automated deployment script
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-### 2. Start Services
+The `deploy.sh` script will:
+- ✅ Check Docker is running
+- ✅ Create required Docker networks
+- ✅ Deploy PostgreSQL cache database
+- ✅ Deploy MCP server
+- ✅ Initialize database schema
+- ✅ Run health checks
+
+### Manual Deployment
 
 ```bash
-# Start PostgreSQL cache database
+# 1. Start PostgreSQL cache database
 cd ../pg_mcp
 docker-compose up -d
 
-# Start MCP server
+# 2. Start MCP server
 cd ../mcp_db_peformance
 docker-compose up -d
 
-# Initialize schema (one-time)
+# 3. Initialize schema (one-time)
 docker exec mcp_db_performance python test-scripts/run_complete_init.py
 ```
 
@@ -354,6 +368,18 @@ GRANT SELECT ON performance_schema.table_io_waits_summary_by_index_usage TO 'you
 
 ---
 
+## 📚 Detailed Documentation
+
+For comprehensive technical details, see [FEATURES_DETAILED.md](FEATURES_DETAILED.md):
+
+- **Business Logic Analysis** - Deep dive into SQL parsing, metadata collection, and semantic inference
+- **PostgreSQL Caching System** - Architecture, schema design, and optimization strategies
+- **Performance Monitoring** - Database health metrics and top queries analysis
+- **Output Filtering Presets** - How to control response size and token usage
+- **Future Improvements** - Roadmap and planned enhancements
+
+---
+
 ## 📈 Performance Benchmarks
 
 ### Business Logic Analysis
@@ -486,9 +512,10 @@ pg_mcp/                           # PostgreSQL cache database
 
 ## 📚 Additional Documentation
 
-- `POSTGRESQL_COMPREHENSIVE_AUDIT_2026-01-16.md` - Complete PostgreSQL audit report
-- `server/knowledge_base/` - Detailed tool documentation
-- `to_delete/` - Migration and test scripts (for review before deletion)
+- [FEATURES_DETAILED.md](FEATURES_DETAILED.md) - In-depth technical documentation
+- [POSTGRESQL_COMPREHENSIVE_AUDIT_2026-01-16.md](POSTGRESQL_COMPREHENSIVE_AUDIT_2026-01-16.md) - PostgreSQL audit report with test results
+- `server/knowledge_base/` - MCP tool documentation
+- `to_delete/` - Obsolete files ready for deletion (includes README)
 
 ---
 
