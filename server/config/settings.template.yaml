@@ -1,0 +1,88 @@
+database_presets:
+  # Add your database connections here
+  my_database:
+    user: your_username
+    password: your_password
+    dsn: hostname:1521/service_name
+
+server:
+  name: performance_mcp
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  show_tool_calls: true  # Log full tool invocations from LLM
+  show_sql_queries: false  # Log actual SQL queries executed (verbose)
+
+# ============================================================================
+# ORACLE SQL ANALYSIS CONFIGURATION
+# ============================================================================
+oracle_analysis:
+  
+  # ========================================
+  # OUTPUT FORMAT (Simple)
+  # ========================================
+  output_preset: "compact"  # standard | compact | minimal
+  
+  # Presets explained:
+  # 
+  # STANDARD - Full analysis for human review
+  #   • Text plan (DBMS_XPLAN) + JSON plan
+  #   • All tables/indexes (even if not in plan)
+  #   • All constraints and detailed stats
+  #   • Best for: Reports, comprehensive analysis
+  #   • Size: ~40K tokens
+  # 
+  # COMPACT - Optimized for LLM analysis (RECOMMENDED)
+  #   • JSON plan only (no duplicate text)
+  #   • Only tables/indexes in execution plan
+  #   • Essential stats only
+  #   • Best for: AI analysis, cost optimization
+  #   • Size: ~20K tokens
+  # 
+  # MINIMAL - Quick analysis
+  #   • JSON plan only
+  #   • Plan objects + table row counts only
+  #   • No detailed column stats or constraints
+  #   • Best for: Fast feedback, simple queries
+  #   • Size: ~12K tokens
+  
+  # ========================================
+  # DATA COLLECTION CONTROL (Advanced)
+  # ========================================
+  # Fine-tune what data to collect
+  # (Output preset controls what gets returned)
+  
+  core:
+    execution_plan:
+      enabled: true
+    plan_details:
+      enabled: true
+  
+  metadata:
+    table_statistics:
+      enabled: true
+    index_statistics:
+      enabled: true
+    column_statistics:
+      enabled: true
+    constraints:
+      enabled: true
+    partition_metadata:
+      enabled: true
+  
+  optimizer:
+    parameters:
+      enabled: true
+      fallback_on_error: true
+  
+  storage:
+    segment_sizes:
+      enabled: true
+      fallback_on_error: true
+  
+  runtime:
+    partition_pruning_diagnostic:
+      enabled: true

@@ -1,0 +1,505 @@
+database_presets:
+
+  # ============================================================================
+  # ORACLE DATABASES
+  # ============================================================================
+  transformer_prod:
+    type: oracle
+    user: transformer
+    password: transformer99
+    dsn: bidb02.prod.bos.credorax.com:1521/stgprod
+
+  transformer_master:
+    type: oracle
+    user: stg
+    password: stg90
+    dsn: stgrndm-np-01.qa.bos.credorax.com:1521/stgdev
+    performance_monitoring:
+      enabled: true
+      allow_system_stats: true
+      allow_top_queries: true
+  way4_docker8:
+    type: oracle
+    user: inform
+    password: Term1k50
+    dsn: docker-lin07.dev1.bos.credorax.com:15208/orclpdb1
+
+  way4_docker7:
+    type: oracle
+    user: inform
+    password: Term1k50
+    dsn: docker-lin07.dev1.bos.credorax.com:15207/orclpdb1
+    performance_monitoring:
+      enabled: false
+      allow_system_stats: true
+      allow_top_queries: true
+
+ 
+  # ============================================================================
+  # MYSQL DATABASES
+  # ============================================================================
+  mysql_devdb03_avi:
+    type: mysql
+    host: devdb03.dev.bos.credorax.com
+    port: 3306
+    user: inform
+    password: inform
+    database: avi
+    version: "8.0.40-commercial"
+    notes: "MySQL Enterprise Server - Commercial"
+
+server:
+  name: performance_mcp
+  
+  # ========================================
+  # AUTHENTICATION (Optional)
+  # ========================================
+  # If enabled, clients must provide API key in Authorization header
+  # Format: Authorization: Bearer <api_key>
+  authentication:
+    enabled: true  # Set to true to enable API key authentication
+    api_keys:
+      - name: "client_1"
+        key: "U1f1mzzSvNKhrtntjJeE0O1KUz-7r7TiuR1-ushQXoc"
+        description: "mcpJam client access"
+      - name: "development"
+        key: "dev-api-key-12345"
+        description: "Development and testing"
+    # Note: Generate secure keys with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# ============================================================================
+# PERFORMANCE MONITORING CONFIGURATION
+# ============================================================================
+performance_monitoring:
+  
+  # ========================================
+  # OUTPUT FORMAT
+  # ========================================
+  output_preset: "compact"  # standard | compact | minimal
+  
+  # Presets explained:
+  # 
+  # STANDARD - Full details
+  #   • All system metrics with descriptions
+  #   • Complete query text for top queries
+  #   • Detailed wait event breakdown
+  #   • Best for: Reports, comprehensive analysis
+  # 
+  # COMPACT - Essential data (RECOMMENDED)
+  #   • Key metrics only
+  #   • Truncated SQL (first 200 chars)
+  #   • Top 3 wait events
+  #   • Best for: LLM analysis, quick overview
+  # 
+  # MINIMAL - Quick health check
+  #   • Health score + critical metrics only
+  #   • SQL IDs only (no text)
+  #   • Single worst wait event
+  #   • Best for: Fast alerts, dashboards
+  
+  # ========================================
+  # CHART FORMAT
+  # ========================================
+  chart_format: "json"  # json | ascii | both
+  
+  # Chart format explained:
+  # 
+  # JSON - Structured data for visualization (RECOMMENDED)
+  #   • Works with matplotlib, plotly, Chart.js
+  #   • LLM can describe trends
+  #   • Easy to parse and extend
+  # 
+  # ASCII - Terminal-friendly text charts
+  #   • Quick visual in terminal
+  #   • No dependencies needed
+  #   • Limited to simple line/bar charts
+  # 
+  # BOTH - Include both formats
+  #   • Best of both worlds
+  #   • Larger response size
+  
+  # ========================================
+  # HISTORICAL SNAPSHOTS
+  # ========================================
+  snapshots:
+    retention_days: 30  # Keep history for 30 days
+    auto_cleanup: true  # Delete old snapshots automatically
+    
+  # ========================================
+  # SCHEDULED SNAPSHOTS (Phase 2 - Disabled)
+  # ========================================
+  scheduled_snapshots:
+    enabled: false  # Set to true to enable background collection
+    system_health_interval_minutes: 5
+    top_queries_interval_minutes: 15
+    note: "Requires scheduler.py to be enabled"
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging:
+  level: DEBUG  # DEBUG, INFO, WARNING, ERROR
+  show_tool_calls: true  # Log full tool invocations from LLM
+  show_sql_queries: true  # Log actual SQL queries executed (verbose)
+
+# ============================================================================
+# MYSQL SQL ANALYSIS CONFIGURATION
+# ============================================================================
+mysql_analysis:
+  
+  # ========================================
+  # OUTPUT FORMAT (Simple)
+  # ========================================
+  output_preset: "standard"  # standard | compact | minimal
+  
+  # Presets explained:
+  # 
+  # STANDARD - Full analysis (RECOMMENDED for MySQL)
+  #   • EXPLAIN FORMAT=JSON plan
+  #   • All table statistics (rows, size, engine)
+  #   • Index structure + usage statistics
+  #   • Duplicate index detection
+  #   • Best for: Complete MySQL analysis
+  #   • Size: ~15K tokens
+  # 
+  # COMPACT - Essential data only
+  #   • JSON plan only
+  #   • Tables in query + row counts
+  #   • Index structure (no usage stats)
+  #   • Best for: Quick analysis, token limits
+  #   • Size: ~8K tokens
+  # 
+  # MINIMAL - Quick check
+  #   • JSON plan only
+  #   • Table row counts
+  #   • No index details
+  #   • Best for: Fast feedback, simple queries
+  #   • Size: ~5K tokens
+  
+  # ========================================
+  # DATA COLLECTION CONTROL (Advanced)
+  # ========================================
+  # Fine-tune what data to collect
+  
+  # === CORE ANALYSIS (Cannot be disabled) ===
+  core:
+    execution_plan:
+      enabled: true
+      description: "EXPLAIN FORMAT=JSON showing optimizer's execution strategy"
+      criticality: CRITICAL
+      note: "Never executes actual SQL - only simulates plan"
+      
+    plan_details:
+      enabled: true
+      description: "Detailed plan steps with costs, access types, filtering"
+      criticality: CRITICAL
+      why_needed: "Shows join methods, index usage, full table scans"
+
+  # === METADATA (Recommended) ===
+  metadata:
+    table_statistics:
+      enabled: true
+      description: "Row counts, storage engine, data size, index size"
+      criticality: HIGH
+      why_needed: "Optimizer uses for cardinality estimates"
+      performance_impact: LOW
+      tables_accessed: [information_schema.TABLES]
+      
+    index_statistics:
+      enabled: true
+      description: "Index structure, columns, cardinality, uniqueness"
+      criticality: HIGH
+      why_needed: "Shows available indexes and their composition"
+      performance_impact: LOW
+      tables_accessed: [information_schema.STATISTICS]
+
+  # === RUNTIME DIAGNOSTICS (Production insights) ===
+  runtime:
+    index_usage_stats:
+      enabled: true
+      description: "Real index usage from performance_schema (reads, writes, latency)"
+      criticality: HIGH
+      why_needed: "Identifies UNUSED indexes and hot indexes in production"
+      performance_impact: LOW
+      requires: "performance_schema enabled"
+      tables_accessed: [performance_schema.table_io_waits_summary_by_index_usage]
+      fallback_on_error: true
+      note: "Shows which indexes are actually used vs. just defined"
+      
+    duplicate_index_detection:
+      enabled: true
+      description: "Detects redundant indexes (same columns, same order)"
+      criticality: MEDIUM
+      why_needed: "Cleanup opportunities - save disk space and write performance"
+      performance_impact: NEGLIGIBLE
+      note: "Computed from information_schema.STATISTICS"
+
+# ============================================================================
+# ORACLE SQL ANALYSIS CONFIGURATION
+# ============================================================================
+oracle_analysis:
+  
+  # ========================================
+  # OUTPUT FORMAT (Simple)
+  # ========================================
+  output_preset: "compact"  # standard | compact | minimal
+  
+  # Presets explained:
+  # 
+  # STANDARD - Full analysis for human review
+  #   • Text plan (DBMS_XPLAN) + JSON plan
+  #   • All tables/indexes (even if not in plan)
+  #   • All constraints and detailed stats
+  #   • Best for: Reports, comprehensive analysis
+  #   • Size: ~40K tokens
+  # 
+  # COMPACT - Optimized for LLM analysis (RECOMMENDED)
+  #   • JSON plan only (no duplicate text)
+  #   • Only tables/indexes in execution plan
+  #   • Essential stats only
+  #   • Best for: AI analysis, cost optimization
+  #   • Size: ~20K tokens
+  # 
+  # MINIMAL - Quick analysis
+  #   • JSON plan only
+  #   • Plan objects + table row counts only
+  #   • No detailed column stats or constraints
+  #   • Best for: Fast feedback, simple queries
+  #   • Size: ~12K tokens
+  
+  # ========================================
+  # DATA COLLECTION CONTROL (Advanced)
+  # ========================================
+  # Fine-tune what data to collect
+  # (Output preset controls what gets returned)
+  
+  # === CORE ANALYSIS (Cannot be disabled - fundamental) ===
+  core:
+    execution_plan:
+      enabled: true
+      description: "EXPLAIN PLAN showing optimizer's execution strategy"
+      criticality: CRITICAL
+      note: "Never executes actual SQL - only simulates plan"
+      
+    plan_details:
+      enabled: true
+      description: "Detailed plan steps with costs, cardinality, predicates"
+      criticality: CRITICAL
+      why_needed: "Shows filtering, join methods, access paths"
+
+  # === METADATA (Highly Recommended) ===
+  metadata:
+    table_statistics:
+      enabled: true
+      description: "Row counts, blocks, avg_row_len, last_analyzed date"
+      criticality: HIGH
+      why_needed: "Optimizer relies on these for cardinality estimates"
+      performance_impact: LOW
+      tables_accessed: [ALL_TABLES]
+      
+    index_statistics:
+      enabled: true
+      description: "Index structure, clustering factor, distinct keys, status"
+      criticality: HIGH
+      why_needed: "Explains why indexes are/aren't chosen"
+      performance_impact: LOW
+      tables_accessed: [ALL_INDEXES]
+      
+    index_columns:
+      enabled: true
+      description: "Which columns are in each index"
+      criticality: HIGH
+      why_needed: "Matches predicates to available indexes"
+      performance_impact: LOW
+      tables_accessed: [ALL_IND_COLUMNS]
+      
+    column_statistics:
+      enabled: true
+      description: "Distinct values, nulls, density, histogram buckets"
+      criticality: HIGH
+      why_needed: "Detects data skew affecting cardinality estimates"
+      performance_impact: LOW
+      tables_accessed: [ALL_TAB_COL_STATISTICS]
+      note: "Filters to columns mentioned in SQL only"
+      
+    constraints:
+      enabled: true
+      description: "Primary keys, foreign keys, unique constraints"
+      criticality: HIGH
+      why_needed: "Optimizer uses for join elimination & transformations"
+      performance_impact: LOW
+      tables_accessed: [ALL_CONSTRAINTS, ALL_CONS_COLUMNS]
+      
+    partition_info:
+      enabled: true
+      description: "Partition type, keys, count, subpartitioning"
+      criticality: HIGH
+      why_needed: "Essential for diagnosing partition pruning issues"
+      performance_impact: LOW
+      tables_accessed: [ALL_PART_TABLES, ALL_PART_KEY_COLUMNS]
+
+  # === OPTIMIZER CONFIGURATION ===
+  optimizer:
+    parameters:
+      enabled: true
+      description: "Optimizer mode, index cost adj, dynamic sampling, etc."
+      criticality: HIGH
+      why_needed: "Explains WHY optimizer chose a specific plan"
+      performance_impact: LOW
+      requires_privileges: SELECT on V$PARAMETER
+      tables_accessed: [V$PARAMETER]
+      fallback_on_error: true
+
+  # === STORAGE & SIZING ===
+  storage:
+    segment_sizes:
+      enabled: true
+      description: "Actual disk space (MB/GB) used by tables & indexes"
+      criticality: MEDIUM
+      why_needed: "Helps understand I/O costs for full scans"
+      performance_impact: LOW
+      requires_privileges: SELECT on DBA_SEGMENTS or USER_SEGMENTS
+      tables_accessed: [DBA_SEGMENTS, USER_SEGMENTS]
+      fallback: "Calculate from blocks * block_size if no access"
+      fallback_on_error: true
+
+  # === RUNTIME DIAGNOSTICS ===
+  runtime:
+    sql_execution_stats:
+      enabled: false
+      description: "Actual executions, buffer gets, CPU time, elapsed time"
+      criticality: MEDIUM
+      why_needed: "Shows real-world performance vs estimated"
+      performance_impact: LOW
+      requires_privileges: SELECT on V$SQL
+      tables_accessed: [V$SQL]
+      when_to_use: "Only when sql_id is provided for already-executed SQL"
+      fallback_on_error: true
+      
+    partition_pruning_diagnostic:
+      enabled: true
+      description: "Detects when partition pruning fails despite partition key in WHERE"
+      criticality: HIGH
+      why_needed: "Critical for partitioned tables - prevents full scans"
+      performance_impact: NEGLIGIBLE
+      note: "Computed from existing data, no extra queries"
+
+  # === COMPARISON MODE ===
+  comparison:
+    quick_compare:
+      enabled: true
+      description: "Fast plan comparison without re-fetching metadata"
+      criticality: MEDIUM
+      why_needed: "Speeds up iteration when testing query improvements"
+      performance_impact: LOW
+      note: "Only runs EXPLAIN PLAN, reuses metadata from previous analysis"
+
+# ============================================================================
+# ANALYSIS MODE PRESETS
+# ============================================================================
+# Quick shortcuts for common scenarios
+
+analysis_modes:
+  # ========================================
+  # MYSQL ANALYSIS MODES
+  # ========================================
+  mysql:
+    quick:
+      description: "Fastest - plan and basic stats only"
+      enabled_features:
+        - core.execution_plan
+        - core.plan_details
+        - metadata.table_statistics
+      
+    standard:
+      description: "Balanced - all metadata + index usage (RECOMMENDED)"
+      enabled_features:
+        - core.execution_plan
+        - core.plan_details
+        - metadata.table_statistics
+        - metadata.index_statistics
+        - runtime.index_usage_stats
+        - runtime.duplicate_index_detection
+      
+    minimal:
+      description: "Minimal - plan and row counts only"
+      enabled_features:
+        - core.execution_plan
+        - core.plan_details
+        - metadata.table_statistics
+      
+    # Custom mode - user can override individual features
+    custom:
+      description: "Use individual feature flags from mysql_analysis section"
+
+  # ========================================
+  # ORACLE ANALYSIS MODES
+  # ========================================
+  oracle:
+    quick:
+      description: "Fastest - plan and basic stats only"
+      enabled_features:
+        - core.execution_plan
+        - core.plan_details
+        - metadata.table_statistics
+        - metadata.index_statistics
+      
+    standard:
+      description: "Balanced - all metadata + optimizer params (recommended)"
+      enabled_features:
+        - all metadata features
+        - optimizer.parameters
+        - storage.segment_sizes
+        - runtime.partition_pruning_diagnostic
+      
+    deep:
+      description: "Comprehensive - everything enabled"
+      enabled_features:
+        - all features
+        
+    # Custom mode - user can override individual features
+    custom:
+      description: "Use individual feature flags from oracle_analysis section"
+
+
+
+slack:
+  token: ${SLACK_BOT_TOKEN}  # Set via environment variable
+  socket_token: ${SLACK_APP_TOKEN}  # Set via environment variable
+
+# ============================================================================
+# MCP SERVER STARTUP CONFIGURATION
+# ============================================================================
+startup:
+  check_db_connections: false  # Set to true to enable DB and MCP knowledge DB connection checks at startup
+
+# ============================================================================
+# POSTGRESQL KNOWLEDGE CACHE CONFIGURATION
+# ============================================================================
+postgresql_cache:
+  # Connection settings (use environment variables for production)
+  host: pg  # PostgreSQL host
+  port: 5432  # PostgreSQL port  
+  database: omni  # PostgreSQL database name
+  user: omni  # PostgreSQL username
+  password: postgres  # PostgreSQL password (use env var KNOWLEDGE_DB_PASSWORD)
+  schema: mcp_performance  # Schema for knowledge base tables
+  
+  # Connection pool settings
+  pool:
+    min_size: 1  # Minimum connections in pool
+    max_size: 10  # Maximum connections in pool
+    
+  # Cache TTL settings (time-to-live in days)
+  cache_ttl:
+    table_knowledge: 7  # Table metadata cache TTL
+    relationships: 7    # Relationship cache TTL
+    query_explanations: 30  # Query explanation cache TTL
+    
+  # Error handling
+  error_handling:
+    log_all_errors: true  # Log all database errors
+    raise_on_connection_failure: false  # Whether to raise on connection failure (false = graceful degradation)
+    retry_attempts: 3  # Number of retry attempts for failed operations
+    retry_delay_seconds: 1  # Delay between retry attempts
+

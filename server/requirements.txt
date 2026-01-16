@@ -1,0 +1,22 @@
+# Async PostgreSQL support
+asyncpg>=0.28.0
+uvloop>=0.19.0
+
+# MCP Framework
+fastmcp
+
+# Database connectors
+oracledb
+mysql-connector-python
+
+# Web framework
+starlette
+uvicorn[standard]
+httpx
+
+# Data handling
+pyyaml
+pydantic
+
+# Logging and monitoring
+structlog>=23.2.0
