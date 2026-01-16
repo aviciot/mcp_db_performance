@@ -570,10 +570,10 @@ async def get_table_business_context(
                 # Get knowledge DB for caching
         try:
             knowledge_db = get_knowledge_db()
-            if knowledge_db and not knowledge_db.is_enabled():
-                logger.debug(f"[DEBUG] About to call await knowledge_db.connect() (enabled={knowledge_db.is_enabled()}, attempts={getattr(knowledge_db, '_connection_attempts', None)})")
+            if knowledge_db and not knowledge_db.is_enabled:
+                logger.debug(f"[DEBUG] About to call await knowledge_db.connect() (enabled={knowledge_db.is_enabled}, attempts={getattr(knowledge_db, '_connection_attempts', None)})")
                 await knowledge_db.connect()
-                logger.debug(f"[DEBUG] After connect: enabled={knowledge_db.is_enabled()}, pool={knowledge_db.pool is not None}, attempts={getattr(knowledge_db, '_connection_attempts', None)}")
+                logger.debug(f"[DEBUG] After connect: enabled={knowledge_db.is_enabled}, pool={knowledge_db.pool is not None}, attempts={getattr(knowledge_db, '_connection_attempts', None)}")
         except Exception as e:
             logger.warning(f"⚠️ Knowledge DB not available: {e}")
             knowledge_db = None
