@@ -59,24 +59,30 @@ def load_feedback_config():
 @mcp.tool(
     name="report_mcp_issue_interactive",
     description=(
-        "🐛 Report a bug, request a feature, or suggest an improvement for this MCP.\n\n"
-        "**Interactive Quality Check:**\n"
-        "• Your feedback will be analyzed for clarity\n"
-        "• I'll help improve unclear descriptions\n"
-        "• You'll preview before submitting to GitHub\n\n"
-        "**Issue Types:**\n"
-        "• bug: Something doesn't work as expected\n"
-        "• feature: New functionality you'd like to see\n"
-        "• improvement: Enhancement to existing features\n\n"
-        "**Rate Limits (per user):**\n"
-        "• 3 submissions per hour\n"
-        "• 10 submissions per day\n\n"
-        "**What happens:**\n"
-        "1. Quality check with improvement suggestions\n"
-        "2. Interactive refinement if needed\n"
-        "3. Preview before submission\n"
-        "4. Creates GitHub issue on approval\n\n"
-        "💡 Tip: Be specific! Include examples, steps, or expected behavior."
+        "🐛 Help user report bugs/features/improvements - BUT VALIDATE RELEVANCE FIRST.\n\n"
+        "⚠️ CRITICAL - YOU MUST VALIDATE BEFORE CALLING THIS TOOL:\n"
+        "This MCP is for DATABASE QUERY ANALYSIS - specifically:\n"
+        "✅ SQL query performance analysis (Oracle & MySQL)\n"
+        "✅ Execution plan optimization\n"
+        "✅ Index recommendations\n"
+        "✅ Query business logic explanation\n"
+        "✅ Database metadata and caching\n\n"
+        "❌ NOT for: Unrelated features, jokes, entertainment, non-database functionality\n\n"
+        "🤔 YOUR JOB BEFORE CALLING THIS TOOL:\n"
+        "1. ANALYZE: Does user's request relate to database query analysis?\n"
+        "2. QUESTION: If unclear or absurd, ask user to clarify or explain MCP scope\n"
+        "3. VALIDATE: Only call this tool if request is genuinely relevant\n"
+        "4. PUSH BACK: Professionally decline if request is off-topic\n\n"
+        "EXAMPLES:\n"
+        "✅ ACCEPT: 'Query timeout on complex joins' → Relevant, call tool\n"
+        "✅ ACCEPT: 'Add index recommendations' → Relevant, call tool\n"
+        "❌ REJECT: 'Get lyrics with analysis' → Off-topic, explain MCP scope to user\n"
+        "❌ REJECT: 'Order pizza when timeout' → Absurd, don't call tool\n\n"
+        "**What happens when you DO call this tool:**\n"
+        "• Rate limit check (3/hour, 10/day)\n"
+        "• Quality analysis (clarity, completeness)\n"
+        "• Preview before GitHub submission\n\n"
+        "**Remember:** Your professional judgment BEFORE calling = Most important filter"
     ),
 )
 async def report_mcp_issue_interactive(
@@ -167,6 +173,21 @@ async def report_mcp_issue_interactive(
 
         logger.info("✅ Content validation passed")
 
+        # STEP 2.5: Relevance check (is this about database query analysis?)
+        analyzer = get_quality_analyzer()
+        relevance = analyzer.analyze_relevance_simple(issue_type, title, description)
+
+        if not relevance["is_relevant"]:
+            logger.warning(f"❌ Relevance check failed: {relevance['category']}")
+            return {
+                "error": "Not relevant to MCP",
+                "category": relevance["category"],
+                "reason": relevance["reason"],
+                "message": relevance["message"]
+            }
+
+        logger.info(f"✅ Relevance check passed ({relevance['category']})")
+
         # STEP 3: Check for duplicates
         content = f"{title} {description}"
         is_duplicate, duplicate_msg = await safety.check_duplicate(session_id, content)
@@ -184,6 +205,26 @@ async def report_mcp_issue_interactive(
         is_good, quality_msg, analysis = quick_quality_check(issue_type, title, description)
 
         logger.info(f"📊 Quality score: {analysis['quality_score']}/10")
+
+        # Check minimum quality threshold
+        min_score = config["quality"]["min_quality_score"]
+
+        if analysis["quality_score"] < min_score:
+            logger.warning(f"❌ Quality score {analysis['quality_score']} below minimum {min_score}")
+            return {
+                "error": "Quality too low",
+                "message": (
+                    f"⚠️ **Feedback Quality Too Low**\n\n"
+                    f"Your feedback scored {analysis['quality_score']}/10, which is below the minimum threshold of {min_score}/10.\n\n"
+                    f"**Issues found:**\n" + "\n".join(f"• {issue}" for issue in analysis["issues_found"]) + "\n\n"
+                    f"**Please:**\n"
+                    f"1. Use `improve_my_feedback` tool to get a better version\n"
+                    f"2. Add more specific details about your issue\n"
+                    f"3. Include examples, steps, or expected behavior\n\n"
+                    f"We want to help, but need enough information to understand the problem!"
+                ),
+                "quality_analysis": analysis
+            }
 
         # Get stats for tracking
         stats = await safety.get_stats(session_id, client_id)
@@ -216,10 +257,11 @@ async def report_mcp_issue_interactive(
             result["message"] = (
                 f"{quality_msg}\n\n"
                 f"**Options:**\n"
-                f"1. Use `improve_my_feedback` tool to get a better version\n"
+                f"1. Use `improve_my_feedback` tool to get a better version (recommended)\n"
                 f"2. Edit your feedback and try again\n"
-                f"3. Submit as-is (we'll still accept it!)\n\n"
-                f"To submit anyway, call this tool again with `auto_submit=True`"
+                f"3. Improve quality first, or confirm you want to submit as-is\n\n"
+                f"To proceed without improvements, call this tool again with `auto_submit=True`\n"
+                f"(Note: Very low quality submissions may still be flagged for review)"
             )
             return result
 

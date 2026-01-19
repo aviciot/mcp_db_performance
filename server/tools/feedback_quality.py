@@ -143,6 +143,105 @@ class FeedbackQualityAnalyzer:
             "vague_word_count": vague_count if vague_count > 3 else 0
         }
 
+    def analyze_relevance_simple(
+        self,
+        issue_type: str,
+        title: str,
+        description: str
+    ) -> Dict:
+        """
+        Check if feedback is relevant to database query analysis.
+
+        Uses keyword matching (not LLM) for fast validation.
+
+        Returns:
+            {
+                "is_relevant": bool,
+                "category": "relevant" | "unclear" | "irrelevant" | "offtopic",
+                "confidence": 0.0-1.0,
+                "reason": str,
+                "message": str (what to tell user)
+            }
+        """
+        combined = f"{title} {description}".lower()
+
+        # Database-related keywords
+        db_keywords = [
+            "query", "sql", "database", "table", "column", "index", "performance",
+            "execution", "plan", "optimize", "oracle", "mysql", "postgresql", "slow",
+            "timeout", "analyze", "explain", "cache", "schema", "join", "select"
+        ]
+
+        # Off-topic keywords that suggest irrelevance
+        offtopic_keywords = [
+            "pizza", "lyrics", "song", "poem", "joke", "game", "weather",
+            "recipe", "music", "movie", "crypto", "lottery", "horoscope",
+            "dance", "sing", "fly", "teleport", "magic", "puzzle"
+        ]
+
+        # Count matches
+        db_count = sum(1 for kw in db_keywords if kw in combined)
+        offtopic_count = sum(1 for kw in offtopic_keywords if kw in combined)
+
+        # Decision logic
+        if offtopic_count > 0:
+            found_keywords = [kw for kw in offtopic_keywords if kw in combined]
+            return {
+                "is_relevant": False,
+                "category": "offtopic",
+                "confidence": 0.9,
+                "reason": f"Contains keywords unrelated to database analysis: {found_keywords}",
+                "message": (
+                    "This request doesn't appear to be related to database query analysis.\n\n"
+                    "This MCP is specifically designed for:\n"
+                    "• Analyzing SQL query performance (Oracle & MySQL)\n"
+                    "• Explaining execution plans and optimization\n"
+                    "• Providing index and query recommendations\n"
+                    "• Understanding database business logic\n\n"
+                    "If you have a genuine database-related issue, please rephrase your request."
+                )
+            }
+
+        if db_count >= 2:
+            return {
+                "is_relevant": True,
+                "category": "relevant",
+                "confidence": 0.8,
+                "reason": "Contains database/query keywords",
+                "message": None
+            }
+
+        if db_count == 1:
+            return {
+                "is_relevant": False,
+                "category": "unclear",
+                "confidence": 0.6,
+                "reason": "Mentions databases but lacks context",
+                "message": (
+                    "I want to make sure this relates to database query analysis.\n\n"
+                    "This MCP provides:\n"
+                    "• SQL performance analysis and optimization\n"
+                    "• Execution plan explanation\n"
+                    "• Query optimization recommendations\n\n"
+                    "Could you clarify how your request relates to these database capabilities?"
+                )
+            }
+
+        # No database keywords at all
+        return {
+            "is_relevant": False,
+            "category": "irrelevant",
+            "confidence": 0.9,
+            "reason": "No database or query-related keywords found",
+            "message": (
+                "This request doesn't mention database queries, SQL, or performance analysis.\n\n"
+                "This MCP is specifically for database query optimization. If you need help with "
+                "something else, this might not be the right tool.\n\n"
+                "If you DO have a database-related issue, please include words like: query, SQL, "
+                "database, performance, execution plan, index, etc."
+            )
+        }
+
     def generate_improvement_prompt(
         self,
         issue_type: str,

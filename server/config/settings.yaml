@@ -531,10 +531,12 @@ feedback:
     # Lower = Label more issues as good | Higher = Label only excellent issues
     # Example: 7.0 means detailed bug reports with examples get labeled automatically
 
-    min_quality_score: 0
+    min_quality_score: 2.0
     # Minimum score to accept (reject anything below this)
-    # 0 = Accept all (just suggest improvements) | 3.0 = Reject very poor feedback
-    # Recommended: Keep at 0 for open source, use 3-5 for internal tools
+    # 2.0 = Reject gibberish/one-word descriptions | 0 = Accept all
+    # Score 2-4 = Allowed but needs improvement
+    # Score 4-7 = Acceptable quality
+    # Score 7+ = Good quality (auto-labeled)
 
   # GitHub API configuration
   # Note: Set GITHUB_TOKEN in .env file (not here!)
