@@ -143,14 +143,14 @@ async def report_mcp_issue_interactive(
 
         # STEP 1: Check rate limits
         safety = get_safety_manager()
-        allowed, limit_msg = safety.check_rate_limit(session_id, client_id)
+        allowed, limit_msg = await safety.check_rate_limit(session_id, client_id)
 
         if not allowed:
             logger.warning(f"⏱️ Rate limit exceeded for {session_id[:20]}")
             return {
                 "error": "Rate limit exceeded",
                 "message": limit_msg,
-                "stats": safety.get_stats(session_id, client_id)
+                "stats": await safety.get_stats(session_id, client_id)
             }
 
         logger.info("✅ Rate limit check passed")
@@ -169,7 +169,7 @@ async def report_mcp_issue_interactive(
 
         # STEP 3: Check for duplicates
         content = f"{title} {description}"
-        is_duplicate, duplicate_msg = safety.check_duplicate(session_id, content)
+        is_duplicate, duplicate_msg = await safety.check_duplicate(session_id, content)
 
         if is_duplicate:
             logger.warning(f"🔄 Duplicate submission detected")
@@ -289,6 +289,7 @@ async def report_mcp_issue_interactive(
 
                 result["stage"] = "submitted"
                 result["github_issue"] = github_result
+                stats = await safety.get_stats(session_id, client_id)
                 result["message"] = (
                     f"✅ **Issue Created Successfully!**\n\n"
                     f"**Issue #{github_result['number']}:** {github_result['html_url']}\n\n"
@@ -297,7 +298,7 @@ async def report_mcp_issue_interactive(
                     f"• The maintainer ({config['maintainer']}) will review your submission\n"
                     f"• You can track progress at the link above\n"
                     f"• You can search existing issues with `search_mcp_issues`\n\n"
-                    f"**Submissions remaining today:** {safety.get_stats(session_id, client_id)['session']['remaining_today']}"
+                    f"**Submissions remaining today:** {stats['session']['remaining_today']}"
                 )
 
                 return result
