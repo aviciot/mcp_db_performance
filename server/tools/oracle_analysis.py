@@ -43,7 +43,7 @@ logger.setLevel(log_level)
         "⚡ Usage: Only call this tool with valid SELECT queries that you want to optimize."
     ),
 )
-def analyze_oracle_query(db_name: str, sql_text: str):
+async def analyze_oracle_query(db_name: str, sql_text: str):
     """
     MCP tool entrypoint for Oracle query analysis.
     Opens Oracle DB connection and calls the real collector.
@@ -127,7 +127,7 @@ def analyze_oracle_query(db_name: str, sql_text: str):
 
         # Check historical executions
         fingerprint = normalize_and_hash(sql_text)
-        history = get_recent_history(fingerprint, db_name)
+        history = await get_recent_history(fingerprint, db_name)
 
         # Call real collector
         result = run_collector(cur, sql_text)
@@ -146,7 +146,7 @@ def analyze_oracle_query(db_name: str, sql_text: str):
         
         # Add historical context
         if history:
-            facts["historical_context"] = compare_with_history(history, facts)
+            facts["historical_context"] = await compare_with_history(history, facts)
             facts["history_count"] = len(history)  # Add count for LLM
             logger.info(f"📊 Historical context: {facts['historical_context'].get('message', 'N/A')}")
             
@@ -207,7 +207,7 @@ def analyze_oracle_query(db_name: str, sql_text: str):
                 f"{s.get('operation', '')} {s.get('options', '')}".strip()
                 for s in plan_details[:5]  # Top 5 operations
             ]
-            store_history(fingerprint, db_name, plan_hash, cost, table_stats, plan_operations)
+            await store_history(fingerprint, db_name, plan_hash, cost, table_stats, plan_operations)
 
         logger.info(f"✅ Analysis complete with {len(plan_details)} plan steps")
         return result
@@ -242,7 +242,7 @@ def analyze_oracle_query(db_name: str, sql_text: str):
         "⚡ Usage: Provide Oracle database name and two valid SELECT queries to compare their execution plans."
     ),
 )
-def compare_oracle_query_plans(db_name: str, original_sql: str, optimized_sql: str):
+async def compare_oracle_query_plans(db_name: str, original_sql: str, optimized_sql: str):
     """
     Compare two Oracle query execution plans to validate optimization improvements.
     Oracle-specific implementation.
@@ -580,8 +580,8 @@ async def get_table_business_context(
             logger.warning(f"⚠️ Knowledge DB not available: {e}")
             knowledge_db = None
         
-        # Collect business context
-        context = await collect_oracle_business_context(
+        # Collect business context (sync function - no await)
+        context = collect_oracle_business_context(
             cur,
             resolved_tables,
             follow_relationships=follow_relationships,

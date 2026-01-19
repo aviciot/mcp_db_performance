@@ -59,12 +59,19 @@ server:
   authentication:
     enabled: true  # Set to true to enable API key authentication
     api_keys:
+
+      - name: "admin"
+        key: "avicohen-admin-1234"
+        description: "admin"
       - name: "client_1"
         key: "U1f1mzzSvNKhrtntjJeE0O1KUz-7r7TiuR1-ushQXoc"
         description: "mcpJam client access"
       - name: "development"
         key: "dev-api-key-12345"
         description: "Development and testing"
+      - name: "DBA"
+        key: "dba-key-123456789"
+        description: "DBA"
     # Note: Generate secure keys with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 # ============================================================================
@@ -466,6 +473,54 @@ analysis_modes:
 slack:
   token: ${SLACK_BOT_TOKEN}  # Set via environment variable
   socket_token: ${SLACK_APP_TOKEN}  # Set via environment variable
+
+# ============================================================================
+# FEEDBACK SYSTEM CONFIGURATION
+# ============================================================================
+# Interactive GitHub issue reporting for bugs, features, and improvements
+feedback:
+  enabled: true  # Set to false to disable the feedback system
+
+  # GitHub repository for issue creation
+  repo: "aviciot/mcp_db_performance"  # Format: "owner/repo"
+  maintainer: "Avi Cohen"  # Maintainer name shown to users
+
+  # Safety and rate limiting
+  safety:
+    # Per-session limits (individual user)
+    session_limits:
+      per_hour: 3      # Max submissions per hour per user
+      per_day: 10      # Max submissions per day per user
+
+    # Per-client limits (team/organization level)
+    client_limits:
+      per_hour: 20     # Max submissions per hour per team
+      per_day: 50      # Max submissions per day per team
+      # Set to null to disable team-level limits
+
+    # Content validation
+    validation:
+      min_title_length: 5
+      max_title_length: 200
+      min_description_length: 10
+      max_description_length: 5000
+
+    # Duplicate detection
+    duplicate_window_minutes: 30  # Window for detecting duplicate submissions
+
+    # Auto-blocking
+    block_duration_hours: 24  # How long to block abusive users
+
+  # Quality checking
+  quality:
+    enabled: true  # Enable LLM-powered quality analysis
+    auto_improve: true  # Suggest improvements for low-quality feedback
+    min_quality_score: 0  # Minimum score to accept (0 = no minimum, suggestions only)
+
+  # GitHub API configuration
+  # Note: Set GITHUB_TOKEN in .env file (not here!)
+  # Generate token at: https://github.com/settings/tokens
+  # Required scopes: repo (for private repos) or public_repo (for public repos)
 
 # ============================================================================
 # MCP SERVER STARTUP CONFIGURATION

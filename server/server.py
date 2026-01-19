@@ -15,8 +15,10 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.requests import Request
 import uvicorn
 
 from config import config
@@ -54,16 +56,7 @@ else:
 # -------------------------------------------------------------
 def _graceful_shutdown(*_):
     logger.info("🛑 Received shutdown signal. Shutting down gracefully...")
-    
-    # Cleanup Knowledge DB connections
-    try:
-        from knowledge_db import cleanup_knowledge_db
-        import asyncio
-        asyncio.run(cleanup_knowledge_db())
-        logger.info("✅ Knowledge DB cleanup complete")
-    except Exception as e:
-        logger.error(f"⚠️  Error during Knowledge DB cleanup: {e}")
-    
+    # Knowledge DB cleanup now handled by lifespan context manager
     logger.info("✅ Graceful shutdown complete")
     sys.exit(0)
 
@@ -117,7 +110,7 @@ else:
 print("=" * 70)
 
 # -------------------------------------------------------------
-# DB Connectivity Test (Init Step) — PARALLEL with better visibility
+# DB Connectivity Test (Optional) — PARALLEL with better visibility
 # -------------------------------------------------------------
 if getattr(config, 'check_db_connections', False):
     logger.info("🔍 Starting parallel DB connectivity tests...\n")
@@ -182,40 +175,50 @@ if getattr(config, 'check_db_connections', False):
             logger.info(" All databases connected successfully ✓")
         logger.info("-" * 60 + "\n")
 
-    # MCP knowledge DB connection check
-    try:
-        from knowledge_db import get_knowledge_db, cleanup_knowledge_db
-        import asyncio
-        async def check_knowledge_db():
-            db = get_knowledge_db()
-            if db.config is None:
-                logger.error("❌ MCP knowledge DB: Config loading failed")
-                return
-            
-            success = await db.init()
-            if success and db.is_enabled:
-                logger.info("✅ MCP knowledge DB connection: SUCCESS")
-                # Get cache stats for diagnostic info
-                try:
-                    stats = await db.get_cache_stats()
-                    logger.info(f"   📊 Cache stats: {stats.get('tables_cached', 0)} tables, {stats.get('relationships_cached', 0)} relationships")
-                    
-                    # Warm cache for better performance
-                    if stats.get('tables_cached', 0) > 0:
-                        logger.info("🔥 Warming cache with frequently accessed tables...")
-                        warm_stats = await db.warm_cache_on_startup(top_n=50)
-                        logger.info(f"   🔥 Cache warmed: {warm_stats.get('warmed', 0)} tables, {warm_stats.get('relationships_warmed', 0)} relationships")
-                        if warm_stats.get('top_domains'):
-                            logger.info(f"   🏷️  Top domains: {', '.join(warm_stats['top_domains'][:5])}")
-                except Exception as stats_error:
-                    logger.warning(f"   ⚠️  Could not get cache stats: {stats_error}")
-            else:
-                logger.error("❌ MCP knowledge DB connection: FAILED")
-                status = db.get_connection_status()
-                logger.error(f"   Connection status: {status}")
-        asyncio.run(check_knowledge_db())
-    except Exception as e:
-        logger.error(f"❌ MCP knowledge DB connection check crashed: {e}", exc_info=True)
+# -------------------------------------------------------------
+# Session Context Middleware
+# -------------------------------------------------------------
+class SessionContextMiddleware(BaseHTTPMiddleware):
+    """
+    Sets session and client context variables for feedback tracking.
+
+    Only active when feedback system is enabled in settings.yaml.
+    Reads from request.state (populated by AuthMiddleware) and sets
+    context variables that are accessible throughout the request lifecycle.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Only activate if feedback system is enabled
+        if not config.is_feedback_enabled():
+            return await call_next(request)
+
+        # Import here to avoid circular dependency
+        from tools.feedback_context import set_request_context
+        import uuid
+
+        # Extract IDs from request.state (set by AuthMiddleware)
+        session_id = getattr(request.state, "session_id", None)
+        client_id = getattr(request.state, "client_id", None)
+        user_id = getattr(request.state, "client_name", None)
+
+        # Fallback values if not set by auth middleware
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        if not client_id:
+            client_id = "anonymous"
+
+        # Always set context variables for this request
+        set_request_context(
+            session_id=session_id,
+            user_id=user_id or client_id,
+            client_id=client_id
+        )
+
+        logger.debug(f"📍 Session context set: client_id={client_id}, session_id={session_id[:16]}...")
+
+        # Continue processing request
+        response = await call_next(request)
+        return response
 
 # -------------------------------------------------------------
 # Build ASGI app
@@ -223,8 +226,76 @@ if getattr(config, 'check_db_connections', False):
 os.environ["PYTHONUNBUFFERED"] = "1"
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+from contextlib import asynccontextmanager
+
+# Knowledge DB initialization
+async def init_knowledge_db():
+    """Initialize knowledge DB connection (required for admin features)."""
+    from knowledge_db import get_knowledge_db
+
+    logger.info("🔗 Initializing MCP Knowledge DB...")
+    db = get_knowledge_db()
+    if db.config is None:
+        logger.error("❌ MCP knowledge DB: Config loading failed")
+        logger.warning("⚠️  Admin features (feedback dashboard, etc.) will not work!")
+        return
+
+    success = await db.init()
+    if success and db.is_enabled:
+        logger.info("✅ MCP knowledge DB connection: SUCCESS")
+        # Get cache stats for diagnostic info
+        try:
+            stats = await db.get_cache_stats()
+            logger.info(f"   📊 Cache stats: {stats.get('tables_cached', 0)} tables, {stats.get('relationships_cached', 0)} relationships")
+
+            # Warm cache for better performance
+            if stats.get('tables_cached', 0) > 0:
+                logger.info("🔥 Warming cache with frequently accessed tables...")
+                warm_stats = await db.warm_cache_on_startup(top_n=50)
+                logger.info(f"   🔥 Cache warmed: {warm_stats.get('warmed', 0)} tables, {warm_stats.get('relationships_warmed', 0)} relationships")
+                if warm_stats.get('top_domains'):
+                    logger.info(f"   🏷️  Top domains: {', '.join(warm_stats['top_domains'][:5])}")
+        except Exception as stats_error:
+            logger.warning(f"   ⚠️  Could not get cache stats: {stats_error}")
+    else:
+        logger.error("❌ MCP knowledge DB connection: FAILED")
+        logger.warning("⚠️  Admin features (feedback dashboard, etc.) will not work!")
+        status = db.get_connection_status()
+        logger.error(f"   Connection status: {status}")
+
+@asynccontextmanager
+async def lifespan(app):
+    """Application lifespan manager - runs on startup and shutdown."""
+    # Startup: Initialize Knowledge DB
+    try:
+        await init_knowledge_db()
+    except Exception as e:
+        logger.error(f"❌ MCP knowledge DB initialization failed: {e}", exc_info=True)
+        logger.warning("⚠️  Admin features (feedback dashboard, etc.) will not work!")
+
+    yield
+
+    # Shutdown: Cleanup Knowledge DB
+    try:
+        from knowledge_db import cleanup_knowledge_db
+        await cleanup_knowledge_db()
+        logger.info("✅ Knowledge DB cleanup complete")
+    except Exception as e:
+        logger.error(f"⚠️  Error during Knowledge DB cleanup: {e}")
+
 mcp_http_app = mcp.http_app(transport="streamable-http")
-app = Starlette(lifespan=mcp_http_app.lifespan)
+
+# Wrap the MCP lifespan with our own lifespan
+@asynccontextmanager
+async def combined_lifespan(app):
+    """Combined lifespan for both MCP and Knowledge DB."""
+    # Start our lifespan
+    async with lifespan(app):
+        # Start MCP lifespan
+        async with mcp_http_app.lifespan(app):
+            yield
+
+app = Starlette(lifespan=combined_lifespan)
 
 # -------------------------------------------------------------
 # Simple Endpoints
@@ -263,12 +334,22 @@ app.add_route("/version", version, methods=["GET"])
 # -------------------------------------------------------------
 # Middleware
 # -------------------------------------------------------------
+# IMPORTANT: Middleware executes in REVERSE order!
+# Listed order: Session Context -> Auth -> CORS
+# Execution order: CORS -> Auth -> Session Context
+# This ensures Auth runs BEFORE Session Context can read request.state
+app.add_middleware(SessionContextMiddleware)
 app.add_middleware(AuthMiddleware, config=config)
 
 if config.auth_enabled:
     logger.info(f"🔐 Authentication ENABLED — {len(config.api_keys)} API key(s) configured")
 else:
     logger.info("🔓 Authentication DISABLED")
+
+if config.is_feedback_enabled():
+    logger.info("🔗 Session Context Middleware enabled (feedback system active)")
+else:
+    logger.info("🔇 Feedback system DISABLED (session context middleware inactive)")
 
 app.add_middleware(
     CORSMiddleware,

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
         "⚡ Usage: Provide MySQL database name and SELECT query to analyze."
     ),
 )
-def analyze_mysql_query(db_name: str, sql_text: str):
+async def analyze_mysql_query(db_name: str, sql_text: str):
     """
     Analyze a MySQL SELECT query for performance issues.
     
@@ -98,9 +98,9 @@ def analyze_mysql_query(db_name: str, sql_text: str):
 
         # Check historical executions
         from history_tracker import normalize_and_hash, store_history, get_recent_history, compare_with_history
-        
+
         fingerprint = normalize_and_hash(sql_text)
-        history = get_recent_history(fingerprint, db_name)
+        history = await get_recent_history(fingerprint, db_name)
 
         # Call collector
         result = run_collector(cur, sql_text)
@@ -112,7 +112,7 @@ def analyze_mysql_query(db_name: str, sql_text: str):
         
         # Add historical context
         if history:
-            facts["historical_context"] = compare_with_history(history, facts)
+            facts["historical_context"] = await compare_with_history(history, facts)
             facts["history_count"] = len(history)
             logger.info(f"📊 Historical context: {facts['historical_context'].get('message', 'N/A')}")
             
@@ -136,7 +136,7 @@ def analyze_mysql_query(db_name: str, sql_text: str):
                 f"{s.get('access_type', '')} {s.get('table', '')}".strip()
                 for s in plan_details[:5]
             ]
-            store_history(fingerprint, db_name, plan_hash, cost, table_stats, plan_operations)
+            await store_history(fingerprint, db_name, plan_hash, cost, table_stats, plan_operations)
 
         logger.info(f"✅ Analysis complete with {len(plan_details)} plan steps")
         return result
@@ -171,7 +171,7 @@ def analyze_mysql_query(db_name: str, sql_text: str):
         "⚡ Usage: Provide MySQL database name and two valid SELECT queries to compare their execution plans."
     ),
 )
-def compare_mysql_query_plans(db_name: str, original_sql: str, optimized_sql: str):
+async def compare_mysql_query_plans(db_name: str, original_sql: str, optimized_sql: str):
     """
     Compare two MySQL query execution plans to validate optimization improvements.
     MySQL-specific implementation.

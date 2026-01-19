@@ -78,7 +78,7 @@ class Config:
     def get_postgresql_config(self):
         """Get PostgreSQL cache configuration with environment variable overrides."""
         config = self.postgresql_cache.copy()
-        
+
         # Allow environment variable overrides
         config["host"] = os.getenv("KNOWLEDGE_DB_HOST", config["host"])
         config["port"] = int(os.getenv("KNOWLEDGE_DB_PORT", config["port"]))
@@ -86,7 +86,12 @@ class Config:
         config["user"] = os.getenv("KNOWLEDGE_DB_USER", config["user"])
         config["password"] = os.getenv("KNOWLEDGE_DB_PASSWORD", config["password"])
         config["schema"] = os.getenv("KNOWLEDGE_DB_SCHEMA", config["schema"])
-        
+
         return config
+
+    def is_feedback_enabled(self):
+        """Check if feedback system is enabled."""
+        feedback_config = self._raw.get("feedback", {})
+        return feedback_config.get("enabled", False)
 
 config = Config()

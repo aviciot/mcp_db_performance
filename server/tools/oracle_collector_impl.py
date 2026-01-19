@@ -118,24 +118,26 @@ def extract_columns_from_sql(sql_text: str):
 # PLAN COLLECTION
 # ============================================================
 
-def validate_sql(cur, sql_text: str):
+def validate_sql_security(sql_text: str):
     """
-    Pre-validate SQL for safety and correctness.
-    Returns (is_valid, error_message, is_dangerous)
-    
-    Safety checks:
-    - Block DDL (CREATE, DROP, ALTER, TRUNCATE)
-    - Block DML writes (INSERT, UPDATE, DELETE, MERGE)
-    - Block DCL (GRANT, REVOKE)
-    - Block system operations (SHUTDOWN, STARTUP)
-    - Only allow SELECT queries
+    PHASE 1: Security validation (NO database connection needed).
+    Checks for dangerous operations before any DB interaction.
+
+    Returns (is_safe, error_message)
+
+    Blocks:
+    - DDL (CREATE, DROP, ALTER, TRUNCATE)
+    - DML writes (INSERT, UPDATE, DELETE, MERGE)
+    - DCL (GRANT, REVOKE)
+    - System operations (SHUTDOWN, STARTUP)
+    - PL/SQL blocks (BEGIN, DECLARE)
+    - Procedure calls (EXECUTE, CALL)
     """
-    return True, None, False  # TEMP: Bypass for testing
     try:
         clean = sql_text.strip().upper()
         if clean.endswith(";"):
             clean = clean[:-1]
-        
+
         # SECURITY CHECK 1: Only allow SELECT statements
         dangerous_keywords = [
             'INSERT', 'UPDATE', 'DELETE', 'MERGE',  # DML writes
@@ -146,32 +148,28 @@ def validate_sql(cur, sql_text: str):
             'EXECUTE', 'CALL',  # Procedure calls
             'BEGIN', 'DECLARE',  # PL/SQL blocks
         ]
-        
-        # Check first word after WITH/comment removal
+
+        # Check first word
         first_word = clean.split()[0] if clean.split() else ''
-        
+
         # Allow WITH clause (for CTEs)
         if first_word == 'WITH':
-            # Find the main query after CTE
-            # Look for SELECT after the CTE definition        
             if 'SELECT' not in clean:
-                return False, "No SELECT found in query with WITH clause", True
+                return False, "No SELECT found in query with WITH clause"
         elif first_word != 'SELECT':
-            return False, f"Only SELECT queries are allowed. Found: {first_word}", True
-        
+            return False, f"Only SELECT queries are allowed. Found: {first_word}"
+
         # Check for dangerous keywords anywhere in the query
         for keyword in dangerous_keywords:
             # Use word boundaries to avoid false positives
-            # e.g., "UPDATE_DATE" column should be OK
-            import re
             pattern = r'\b' + re.escape(keyword) + r'\b'
             if re.search(pattern, clean):
-                return False, f"DANGEROUS OPERATION BLOCKED: {keyword} statements are not allowed", True
-        
+                return False, f"DANGEROUS OPERATION BLOCKED: {keyword} statements are not allowed"
+
         # SECURITY CHECK 2: Block INTO clauses (SELECT INTO)
         if re.search(r'\bINTO\b', clean):
-            return False, "DANGEROUS OPERATION BLOCKED: SELECT INTO is not allowed", True
-        
+            return False, "DANGEROUS OPERATION BLOCKED: SELECT INTO is not allowed"
+
         # SECURITY CHECK 3: Limit subquery depth to prevent DoS
         paren_depth = 0
         max_depth = 0
@@ -181,29 +179,63 @@ def validate_sql(cur, sql_text: str):
                 max_depth = max(max_depth, paren_depth)
             elif char == ')':
                 paren_depth -= 1
-        
+
         if max_depth > 10:
-            return False, f"Query too complex: subquery nesting depth {max_depth} exceeds limit of 10", False
-        
-        # SYNTAX/SEMANTIC CHECK: Try to execute with ROWNUM = 0
+            return False, f"Query too complex: subquery nesting depth {max_depth} exceeds limit of 10"
+
+        return True, None
+
+    except Exception as e:
+        return False, f"Security validation error: {str(e)}"
+
+
+def validate_sql_syntax(cur, sql_text: str):
+    """
+    PHASE 2: Syntax validation (REQUIRES database cursor).
+    Tests query syntax by executing with zero rows.
+
+    Returns (is_valid, error_message)
+    """
+    try:
         original_sql = sql_text.strip()
         if original_sql.endswith(";"):
             original_sql = original_sql[:-1]
-        
+
         # Wrap in subquery and limit to 0 rows - validates structure without data
         test_stmt = f"SELECT * FROM ({original_sql}) subq WHERE ROWNUM = 0"
         cur.execute(test_stmt)
         cur.fetchall()
-        
-        return True, None, False
-        
+
+        return True, None
+
     except Exception as e:
         error_msg = str(e)
         # Extract Oracle error code and message
         if "ORA-" in error_msg:
-            # Clean up the error message
             error_msg = error_msg.split('\n')[0]  # First line only
-        return False, error_msg, False
+        return False, error_msg
+
+
+def validate_sql(cur, sql_text: str):
+    """
+    Complete SQL validation: security + syntax.
+    Returns (is_valid, error_message, is_dangerous)
+
+    Call order:
+    1. Security checks (no DB) - fast rejection of dangerous queries
+    2. Syntax checks (with DB) - validate query structure
+    """
+    # PHASE 1: Security validation (no DB needed)
+    is_safe, security_error = validate_sql_security(sql_text)
+    if not is_safe:
+        return False, security_error, True  # is_dangerous=True
+
+    # PHASE 2: Syntax validation (needs cursor)
+    is_valid, syntax_error = validate_sql_syntax(cur, sql_text)
+    if not is_valid:
+        return False, syntax_error, False  # is_dangerous=False (just syntax error)
+
+    return True, None, False
 
 
 def explain_plan(cur, sql_text: str, stmt_id: str):
