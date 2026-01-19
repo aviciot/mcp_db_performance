@@ -511,13 +511,30 @@ feedback:
     # Auto-blocking
     block_duration_hours: 24  # How long to block abusive users
 
-  # Quality checking
+  # Quality checking (AI-powered feedback analysis)
+  #
+  # When users submit feedback, it's scored 0-10 based on clarity, completeness, and actionability.
+  # This helps filter out vague reports like "doesn't work" and encourages detailed bug reports.
+  #
   quality:
-    enabled: true  # Enable LLM-powered quality analysis
-    auto_improve: true  # Suggest improvements for low-quality feedback
-    auto_improve_threshold: 4.0  # Score below this triggers improvement suggestion (0-10 scale)
-    good_quality_threshold: 7.0  # Score above this gets "good-quality" label
-    min_quality_score: 0  # Minimum score to accept (0 = no minimum, suggestions only)
+    enabled: true  # true = Use AI to score feedback quality | false = Accept all without analysis
+    auto_improve: true  # true = Suggest improvements for unclear feedback | false = Accept as-is
+
+    # Score thresholds (0-10 scale):
+    auto_improve_threshold: 4.0
+    # Feedback scoring below this gets improvement suggestions before submission
+    # Lower = More lenient (suggest less often) | Higher = More strict (suggest more often)
+    # Example: 4.0 means "title: bug, description: broken" (score 2/10) triggers suggestions
+
+    good_quality_threshold: 7.0
+    # Feedback scoring above this gets "good-quality" GitHub label
+    # Lower = Label more issues as good | Higher = Label only excellent issues
+    # Example: 7.0 means detailed bug reports with examples get labeled automatically
+
+    min_quality_score: 0
+    # Minimum score to accept (reject anything below this)
+    # 0 = Accept all (just suggest improvements) | 3.0 = Reject very poor feedback
+    # Recommended: Keep at 0 for open source, use 3-5 for internal tools
 
   # GitHub API configuration
   # Note: Set GITHUB_TOKEN in .env file (not here!)
