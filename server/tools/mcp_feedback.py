@@ -185,6 +185,9 @@ async def report_mcp_issue_interactive(
 
         logger.info(f"📊 Quality score: {analysis['quality_score']}/10")
 
+        # Get stats for tracking
+        stats = await safety.get_stats(session_id, client_id)
+
         result = {
             "stage": "quality_check",
             "quality_analysis": {
@@ -202,7 +205,7 @@ async def report_mcp_issue_interactive(
             },
             "tracking": {
                 "session_id": tracking["session_id"],
-                "submissions_remaining": safety.get_stats(session_id, client_id)
+                "submissions_remaining": stats
             }
         }
 
