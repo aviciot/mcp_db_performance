@@ -515,6 +515,8 @@ feedback:
   quality:
     enabled: true  # Enable LLM-powered quality analysis
     auto_improve: true  # Suggest improvements for low-quality feedback
+    auto_improve_threshold: 4.0  # Score below this triggers improvement suggestion (0-10 scale)
+    good_quality_threshold: 7.0  # Score above this gets "good-quality" label
     min_quality_score: 0  # Minimum score to accept (0 = no minimum, suggestions only)
 
   # GitHub API configuration

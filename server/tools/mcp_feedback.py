@@ -22,6 +22,7 @@ def load_feedback_config():
         with open("/app/config/settings.yaml", "r") as f:
             config = yaml.safe_load(f)
             feedback_config = config.get("feedback", {})
+            quality_config = feedback_config.get("quality", {})
 
             return {
                 "enabled": feedback_config.get("enabled", True),
@@ -29,6 +30,13 @@ def load_feedback_config():
                 "maintainer": feedback_config.get("maintainer", "maintainer"),
                 "github_token": os.getenv("GITHUB_TOKEN"),
                 "safety": feedback_config.get("safety", {}),
+                "quality": {
+                    "enabled": quality_config.get("enabled", True),
+                    "auto_improve": quality_config.get("auto_improve", True),
+                    "auto_improve_threshold": quality_config.get("auto_improve_threshold", 4.0),
+                    "good_quality_threshold": quality_config.get("good_quality_threshold", 7.0),
+                    "min_quality_score": quality_config.get("min_quality_score", 0),
+                },
             }
     except Exception as e:
         logger.warning(f"Could not load feedback config: {e}")
@@ -38,6 +46,13 @@ def load_feedback_config():
             "maintainer": "maintainer",
             "github_token": None,
             "safety": {},
+            "quality": {
+                "enabled": True,
+                "auto_improve": True,
+                "auto_improve_threshold": 4.0,
+                "good_quality_threshold": 7.0,
+                "min_quality_score": 0,
+            },
         }
 
 
@@ -208,10 +223,14 @@ async def report_mcp_issue_interactive(
         # STEP 6: Create preview
         labels = [issue_type, "user-submitted"]
 
-        # Add quality label
-        if analysis["quality_score"] >= 7:
+        # Add quality label (use thresholds from config)
+        config = load_feedback_config()
+        good_threshold = config["quality"]["good_quality_threshold"]
+        improve_threshold = config["quality"]["auto_improve_threshold"]
+
+        if analysis["quality_score"] >= good_threshold:
             labels.append("good-quality")
-        elif analysis["quality_score"] < 4:
+        elif analysis["quality_score"] < improve_threshold:
             labels.append("needs-clarification")
 
         issue_body = f"""{description}
