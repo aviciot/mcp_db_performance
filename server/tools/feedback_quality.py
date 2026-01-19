@@ -162,51 +162,35 @@ class FeedbackQualityAnalyzer:
             issues_list = "\n".join(f"- {issue}" for issue in quality_analysis["issues_found"])
             issues_section = f"\n**Issues detected:**\n{issues_list}\n"
 
-        prompt = f"""You are helping a user improve their feedback for a software project.
+        prompt = f"""Fix clarity issues in this feedback. Make MINIMAL changes.
 
-**Issue Type:** {issue_type}
-**Current Title:** {title}
-**Current Description:** {description}
-
+**Type:** {issue_type}
+**Title:** {title}
+**Description:** {description}
 **Quality Score:** {quality_analysis['quality_score']}/10
 {issues_section}
 
-**Your task:**
-Rewrite this feedback to be clearer, more specific, and more actionable. Follow these guidelines:
+**Guidelines:**
+1. Make MINIMAL changes - preserve the user's brevity
+2. Only fix vague/unclear parts (replace "it", "something", "doesn't work")
+3. Keep it SHORT - don't expand unless absolutely necessary
+4. NO boilerplate sections (no "Environment:", "Steps:", "Expected:" unless user implied them)
+5. Preserve casual tone
+6. Don't add bullet points unless user's meaning requires them
 
-1. **For Bug Reports:**
-   - What happened? (actual behavior)
-   - What should happen? (expected behavior)
-   - Steps to reproduce (if applicable)
-   - Any error messages or relevant details
+**Examples:**
+- "bug in query" → "Bug: Query analysis fails for complex joins"
+- "add feature" → "Feature request: Add [specific feature name]"
+- Short input → Short output (don't expand)
 
-2. **For Feature Requests:**
-   - What feature do you want?
-   - Why is it needed? (use case)
-   - How should it work?
-
-3. **For Improvements:**
-   - What should be improved?
-   - Why is the current state problematic?
-   - What would be better?
-
-**Important:**
-- Keep the user's original meaning and intent
-- Remove vague words (something, somehow, maybe, etc.)
-- Add structure with clear sections or bullet points
-- Be specific and concrete
-- Keep it concise but complete
-- Maintain the user's tone (don't make it overly formal if they wrote casually)
-
-**Output Format:**
-Return ONLY a JSON object with this exact structure:
+**Output JSON:**
 {{
-  "improved_title": "Clear, specific title (max 100 chars)",
-  "improved_description": "Well-structured description with all key details",
-  "changes_made": ["List of improvements made"]
+  "improved_title": "Clearer title (SHORT)",
+  "improved_description": "Clearer description (BRIEF - match user's length)",
+  "changes_made": ["What you fixed"]
 }}
 
-Do not include any text outside the JSON object."""
+NO text outside JSON."""
 
         return prompt
 
@@ -266,6 +250,68 @@ Do not include any text outside the JSON object."""
                 "error": f"Unexpected error: {str(e)}",
                 "raw_response": llm_response
             }
+
+    async def improve_feedback_with_llm(
+        self,
+        issue_type: str,
+        title: str,
+        description: str,
+        quality_analysis: Dict
+    ) -> Dict:
+        """
+        Use Claude API to actually improve the feedback.
+
+        Returns:
+            {
+                "improved_title": str,
+                "improved_description": str,
+                "changes_made": [list],
+                "error": str (if failed)
+            }
+        """
+        try:
+            import httpx
+            import os
+
+            # Get Claude API key
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                return {"error": "ANTHROPIC_API_KEY not set - cannot improve feedback"}
+
+            # Generate the improvement prompt
+            prompt = self.generate_improvement_prompt(issue_type, title, description, quality_analysis)
+
+            # Call Claude API
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json"
+                    },
+                    json={
+                        "model": "claude-3-haiku-20240307",
+                        "max_tokens": 1024,
+                        "messages": [{
+                            "role": "user",
+                            "content": prompt
+                        }]
+                    }
+                )
+
+                if response.status_code != 200:
+                    return {"error": f"Claude API error: {response.status_code}"}
+
+                result = response.json()
+                llm_response = result["content"][0]["text"]
+
+                # Parse the response
+                return self.parse_improved_feedback(llm_response)
+
+        except Exception as e:
+            logger.error(f"Failed to improve feedback with LLM: {e}")
+            return {"error": str(e)}
 
 
 # Global instance

@@ -391,38 +391,33 @@ async def improve_my_feedback(
 
         logger.info(f"📊 Current quality: {analysis['quality_score']}/10")
 
+        # If already good quality, no improvement needed
+        if not analysis["needs_improvement"]:
+            return f"✅ Your feedback is already clear (score: {analysis['quality_score']}/10). No changes needed!"
+
         # Generate improvement prompt
         improvement_prompt = analyzer.generate_improvement_prompt(
             issue_type, title, description, analysis
         )
 
-        # Return prompt for LLM to process
-        # Note: In actual implementation, this would call Claude API
-        # For now, return the prompt and guidance
+        # Actually improve the feedback using LLM
+        improved = await analyzer.improve_feedback_with_llm(
+            issue_type, title, description, analysis
+        )
 
-        return {
-            "current_quality": {
-                "score": analysis["quality_score"],
-                "issues": analysis["issues_found"],
-                "suggestions": analysis["suggestions"]
-            },
-            "improvement_needed": analysis["needs_improvement"],
-            "message": (
-                f"📊 **Current Quality:** {analysis['quality_score']}/10\n\n"
-                f"**Issues Found:**\n" +
-                "\n".join(f"• {issue}" for issue in analysis["issues_found"]) +
-                f"\n\n**Suggestions:**\n" +
-                "\n".join(f"• {sug}" for sug in analysis["suggestions"]) +
-                f"\n\n**Next Step:**\n"
-                f"I can help rewrite this to be clearer. Would you like me to suggest improvements?"
-            ),
-            "improvement_prompt": improvement_prompt,
-            "original": {
-                "type": issue_type,
-                "title": title,
-                "description": description
-            }
-        }
+        if improved.get("error"):
+            return f"❌ Could not improve feedback: {improved['error']}"
+
+        # Return simple, clean response
+        changes = "\n".join(f"• {change}" for change in improved.get("changes_made", []))
+
+        return (
+            f"✨ **Improved Version** (was {analysis['quality_score']}/10):\n\n"
+            f"**Title:** {improved['improved_title']}\n\n"
+            f"**Description:**\n{improved['improved_description']}\n\n"
+            f"**Changes Made:**\n{changes}\n\n"
+            f"💡 Copy this and use it with `report_mcp_issue_interactive`"
+        )
 
     except Exception as e:
         logger.exception("❌ Exception in improve_my_feedback")
