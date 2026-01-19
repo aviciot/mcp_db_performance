@@ -47,6 +47,10 @@ database_presets:
     database: avi
     version: "8.0.40-commercial"
     notes: "MySQL Enterprise Server - Commercial"
+    performance_monitoring:
+      enabled: true
+      allow_system_stats: true
+      allow_top_queries: true
 
 server:
   name: performance_mcp

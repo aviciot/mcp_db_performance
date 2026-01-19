@@ -179,13 +179,14 @@ class FeedbackQualityAnalyzer:
             "dance", "sing", "fly", "teleport", "magic", "puzzle"
         ]
 
-        # Count matches
-        db_count = sum(1 for kw in db_keywords if kw in combined)
-        offtopic_count = sum(1 for kw in offtopic_keywords if kw in combined)
+        # Count matches (use word boundaries to avoid false positives like "sing" in "processing")
+        import re
+        db_count = sum(1 for kw in db_keywords if re.search(r'\b' + re.escape(kw) + r'\b', combined))
+        offtopic_count = sum(1 for kw in offtopic_keywords if re.search(r'\b' + re.escape(kw) + r'\b', combined))
 
         # Decision logic
         if offtopic_count > 0:
-            found_keywords = [kw for kw in offtopic_keywords if kw in combined]
+            found_keywords = [kw for kw in offtopic_keywords if re.search(r'\b' + re.escape(kw) + r'\b', combined)]
             return {
                 "is_relevant": False,
                 "category": "offtopic",
