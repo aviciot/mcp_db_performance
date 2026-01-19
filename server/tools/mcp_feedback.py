@@ -130,7 +130,7 @@ async def report_mcp_issue_interactive(
 
         # Import safety and quality modules
         from tools.feedback_context import get_user_identifier, get_client_identifier, get_tracking_info
-        from tools.feedback_safety import get_safety_manager
+        from tools.feedback_safety_db import get_safety_manager
         from tools.feedback_quality import get_quality_analyzer, quick_quality_check
 
         # Get tracking info
@@ -273,8 +273,17 @@ async def report_mcp_issue_interactive(
                         "preview": preview
                     }
 
-                # Record submission
-                safety.record_submission(session_id, client_id, content)
+                # Record submission to database
+                await safety.record_submission(
+                    session_identifier=session_id,
+                    client_identifier=client_id,
+                    submission_type=issue_type,
+                    title=title,
+                    description=description,
+                    quality_score=analysis["quality_score"],
+                    github_issue_number=github_result.get("number"),
+                    github_issue_url=github_result.get("html_url")
+                )
 
                 logger.info(f"✅ Issue created: {github_result['html_url']}")
 

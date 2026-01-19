@@ -243,6 +243,15 @@ async def init_knowledge_db():
     success = await db.init()
     if success and db.is_enabled:
         logger.info("✅ MCP knowledge DB connection: SUCCESS")
+
+        # Initialize feedback safety manager with database pool
+        try:
+            from tools.feedback_safety_db import initialize_safety_manager
+            initialize_safety_manager(db.pool)
+            logger.info("✅ Feedback safety manager initialized with database storage")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not initialize feedback safety manager with DB: {e}")
+
         # Get cache stats for diagnostic info
         try:
             stats = await db.get_cache_stats()
