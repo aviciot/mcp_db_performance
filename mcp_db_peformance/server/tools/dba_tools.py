@@ -12,7 +12,6 @@ from mcp_app import mcp
 from config import config
 from db_connector import oracle_connector
 import mysql_connector
-from tools.db_availability import ensure_db_available
 from tools.tool_auth import require_roles
 
 logger = logging.getLogger(__name__)
@@ -33,10 +32,6 @@ def _get_db_connector_and_type(db_name: str):
     """
     if db_name not in config.database_presets:
         raise ValueError(f"Database '{db_name}' not found in configuration")
-
-    availability = ensure_db_available(db_name)
-    if not availability.get("ok"):
-        raise ValueError(availability.get("message", "Database connection failed"))
 
     db_config = config.database_presets[db_name]
     db_type = db_config.get("type", "oracle").lower()
