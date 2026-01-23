@@ -261,9 +261,9 @@ async def analyze_oracle_query(db_name: str, sql_text: str, depth: str = "standa
             )
         
         result["prompt"] = "".join(prompt_parts)
-        
-        # Store current execution in history
-        if plan_details:
+
+        # Store current execution in history (only for standard mode)
+        if depth == "standard" and plan_details:
             plan_hash = plan_details[0].get("plan_hash_value", "unknown")
             cost = plan_details[0].get("cost", 0)
             table_stats = {t["table_name"]: t["num_rows"] for t in facts.get("table_stats", [])}
