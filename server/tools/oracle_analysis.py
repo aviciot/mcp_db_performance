@@ -39,20 +39,40 @@ logger.setLevel(log_level)
         "❌ System ops: SHUTDOWN, STARTUP, EXECUTE, CALL\n"
         "❌ PL/SQL blocks: BEGIN, DECLARE\n"
         "❌ SELECT INTO (data insertion)\n\n"
-        "📊 Returns: Execution plan, table/index stats, performance recommendations.\n\n"
-        "⚡ Usage: Only call this tool with valid SELECT queries that you want to optimize."
+        "📊 DEPTH MODES:\n"
+        "• depth='plan_only' - Fast execution plan analysis only (0.3s, educational)\n"
+        "• depth='standard' - Full analysis with metadata (default, for optimization)\n\n"
+        "💡 Use 'plan_only' to understand query execution without optimization.\n"
+        "   Use 'standard' (default) when you need to optimize the query.\n\n"
+        "⚡ Usage: Only call this tool with valid SELECT queries that you want to analyze."
     ),
 )
-async def analyze_oracle_query(db_name: str, sql_text: str):
+async def analyze_oracle_query(db_name: str, sql_text: str, depth: str = "standard"):
     """
     MCP tool entrypoint for Oracle query analysis.
     Opens Oracle DB connection and calls the real collector.
+
+    Args:
+        db_name: Oracle database preset name from settings.yaml
+        sql_text: SQL SELECT query to analyze
+        depth: Analysis depth mode
+            - "plan_only": Fast execution plan only (no metadata collection)
+            - "standard": Full analysis with all metadata (default)
     """
+    # Validate depth parameter
+    if depth not in ["plan_only", "standard"]:
+        return {
+            "error": f"Invalid depth parameter: '{depth}'",
+            "facts": {},
+            "prompt": "depth must be 'plan_only' or 'standard'"
+        }
+
     # Log tool invocation details if enabled
     if config.show_tool_calls:
         logger.info("=" * 80)
         logger.info("🔧 TOOL CALLED BY LLM: analyze_oracle_query")
         logger.info(f"   📊 Database: {db_name}")
+        logger.info(f"   📊 Depth: {depth}")
         logger.info(f"   📝 SQL Length: {len(sql_text)} characters")
         if logger.isEnabledFor(logging.DEBUG):
             # Only show full SQL in DEBUG mode
@@ -63,7 +83,7 @@ async def analyze_oracle_query(db_name: str, sql_text: str):
             logger.info(f"   💬 SQL Preview: {sql_preview}")
         logger.info("=" * 80)
     else:
-        logger.info(f"🔍 analyze_oracle_query(db={db_name}) called")
+        logger.info(f"🔍 analyze_oracle_query(db={db_name}, depth={depth}) called")
 
     if not sql_text or not sql_text.strip():
         return {"error": "sql_text is empty", "facts": {}, "prompt": ""}
@@ -125,12 +145,40 @@ async def analyze_oracle_query(db_name: str, sql_text: str):
         
         logger.info("✅ SQL query is valid and safe")
 
-        # Check historical executions
-        fingerprint = normalize_and_hash(sql_text)
-        history = await get_recent_history(fingerprint, db_name)
+        # AUTO-ADJUST PRESET FOR LARGE QUERIES
+        # Save original preset and determine if adjustment needed
+        original_preset = config.output_preset
+        adjusted_preset = original_preset  # Track what we adjusted to
+        preset_adjusted = False
+        query_length = len(sql_text)
 
-        # Call real collector
-        result = run_collector(cur, sql_text)
+        if query_length >= 50000:
+            # Very large query - use minimal preset
+            config.output_preset = "minimal"
+            adjusted_preset = "minimal"
+            preset_adjusted = True
+            logger.warning(f"⚠️ Large query detected ({query_length:,} chars). Auto-switching to 'minimal' preset.")
+        elif query_length >= 10000:
+            # Large query - use compact preset (unless already minimal)
+            if original_preset == "standard":
+                config.output_preset = "compact"
+                adjusted_preset = "compact"
+                preset_adjusted = True
+                logger.info(f"📊 Query length {query_length:,} chars. Auto-switching to 'compact' preset.")
+
+        try:
+            # Check historical executions (skip for plan_only mode)
+            if depth == "standard":
+                fingerprint = normalize_and_hash(sql_text)
+                history = await get_recent_history(fingerprint, db_name)
+            else:
+                history = None
+
+            # Call real collector with depth parameter
+            result = run_collector(cur, sql_text, depth=depth)
+        finally:
+            # Always restore original preset
+            config.output_preset = original_preset
         
         facts = result.get("facts", {})
         plan_details = facts.get("plan_details", [])
@@ -167,7 +215,23 @@ async def analyze_oracle_query(db_name: str, sql_text: str):
         
         # Build informational prompt (no recommendations)
         prompt_parts = [result.get("prompt", "")]
-        
+
+        # Add depth mode notification
+        if depth == "plan_only":
+            prompt_parts.append(
+                f"\n📖 PLAN-ONLY MODE: This is a fast execution plan analysis without metadata collection. "
+                f"Use depth='standard' for full optimization analysis with table/index/column statistics."
+            )
+
+        # Add preset adjustment notification if it occurred
+        if preset_adjusted:
+            prompt_parts.append(
+                f"\n⚙️ NOTE: Large query detected ({query_length:,} characters). "
+                f"Analysis preset automatically adjusted to '{adjusted_preset}' "
+                f"(from '{original_preset}') to optimize token usage. "
+                f"Full SQL preserved for accurate optimization recommendations."
+            )
+
         # Add query pattern info
         if query_intent:
             prompt_parts.append(

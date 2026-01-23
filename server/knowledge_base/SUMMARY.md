@@ -8,6 +8,7 @@
 3. **workflows.md** - 7 step-by-step common workflows
 4. **architecture.md** - How presets work, internals, data flow
 5. **troubleshooting.md** - Common errors and solutions
+6. **depth_modes.md** - ✨ NEW: Analysis depth modes (plan_only vs standard)
 
 ### Tool Documentation
 1. **tools/check_oracle_access.md** - Verify Oracle permissions (MISSING TOOL - now documented!)
@@ -16,8 +17,8 @@
 
 ## Knowledge Base Statistics
 
-- **Total Files:** 8 markdown files
-- **Total Documentation:** ~15,000 words
+- **Total Files:** 9 markdown files
+- **Total Documentation:** ~18,000 words
 - **Coverage:**
   - ✅ MCP overview and purpose
   - ✅ All missing tools documented (check_oracle_access, check_mysql_access)
@@ -27,6 +28,7 @@
   - ✅ Architecture with Mermaid diagrams
   - ✅ 15+ troubleshooting scenarios
   - ✅ Error messages with solutions
+  - ✅ ✨ NEW: Depth modes (plan_only vs standard)
 
 ## What's Included vs Old help_tools.py
 
@@ -82,6 +84,7 @@ The knowledge base enables:
 - ✅ Answering "why is my query slow?" (workflows.md)
 - ✅ Answering "what does ORA-00942 mean?" (troubleshooting.md)
 - ✅ Answering "how does analyze_oracle_query work?" (tool doc + architecture)
+- ✅ ✨ NEW: Answering "explain this plan" vs "optimize this query" (depth_modes.md)
 
 ## Next Steps
 
@@ -158,3 +161,9 @@ knowledge_base/
 
 ### User gets error: "ORA-00942"
 → LLM reads: `troubleshooting.md` → "Permission Errors" section
+
+### User asks: "Explain what INDEX SKIP SCAN means"
+→ LLM reads: `depth_modes.md` → Uses depth="plan_only" for fast explanation
+
+### User asks: "Optimize this query"
+→ LLM reads: `depth_modes.md` → Uses depth="standard" for full analysis

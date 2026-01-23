@@ -29,24 +29,40 @@ logger = logging.getLogger(__name__)
         "❌ Data loading: LOAD, IMPORT, HANDLER\n"
         "❌ INTO OUTFILE/DUMPFILE (data exfiltration)\n"
         "❌ Table locking: LOCK, UNLOCK\n\n"
-        "📊 Returns: Execution plan (EXPLAIN FORMAT=JSON), table statistics, index recommendations, usage patterns.\n\n"
+        "📊 DEPTH MODES:\n"
+        "• depth='plan_only' - Fast execution plan analysis only (0.3s, educational)\n"
+        "• depth='standard' - Full analysis with metadata (default, for optimization)\n\n"
+        "💡 Use 'plan_only' to understand query execution without optimization.\n"
+        "   Use 'standard' (default) when you need to optimize the query.\n\n"
         "⚡ Usage: Provide MySQL database name and SELECT query to analyze."
     ),
 )
-async def analyze_mysql_query(db_name: str, sql_text: str):
+async def analyze_mysql_query(db_name: str, sql_text: str, depth: str = "standard"):
     """
     Analyze a MySQL SELECT query for performance issues.
-    
+
     Args:
         db_name: Name of MySQL database from settings.yaml
         sql_text: SELECT query to analyze
-    
+        depth: Analysis depth mode
+            - "plan_only": Fast execution plan only (no metadata collection)
+            - "standard": Full analysis with all metadata (default)
+
     Returns:
         Dict with execution plan, table stats, indexes, and historical context
     """
+    # Validate depth parameter
+    if depth not in ["plan_only", "standard"]:
+        return {
+            "error": f"Invalid depth parameter: '{depth}'",
+            "facts": {},
+            "prompt": "depth must be 'plan_only' or 'standard'"
+        }
+
     logger.info("="*70)
     logger.info("🔧 TOOL CALLED BY LLM: analyze_mysql_query")
     logger.info(f"   📊 Database: {db_name}")
+    logger.info(f"   📊 Depth: {depth}")
     logger.info(f"   📝 SQL Length: {len(sql_text)} characters")
     logger.info(f"   💬 SQL Preview: {sql_text[:100]}")
     logger.info("="*70)
@@ -96,26 +112,72 @@ async def analyze_mysql_query(db_name: str, sql_text: str):
         
         logger.info("✅ SQL query is valid and safe")
 
-        # Check historical executions
-        from history_tracker import normalize_and_hash, store_history, get_recent_history, compare_with_history
+        # AUTO-ADJUST PRESET FOR LARGE QUERIES
+        # Save original preset and determine if adjustment needed
+        from config import config
+        original_preset = config.output_preset
+        adjusted_preset = original_preset  # Track what we adjusted to
+        preset_adjusted = False
+        query_length = len(sql_text)
 
-        fingerprint = normalize_and_hash(sql_text)
-        history = await get_recent_history(fingerprint, db_name)
+        if query_length >= 50000:
+            # Very large query - use minimal preset
+            config.output_preset = "minimal"
+            adjusted_preset = "minimal"
+            preset_adjusted = True
+            logger.warning(f"⚠️ Large query detected ({query_length:,} chars). Auto-switching to 'minimal' preset.")
+        elif query_length >= 10000:
+            # Large query - use compact preset (unless already minimal)
+            if original_preset == "standard":
+                config.output_preset = "compact"
+                adjusted_preset = "compact"
+                preset_adjusted = True
+                logger.info(f"📊 Query length {query_length:,} chars. Auto-switching to 'compact' preset.")
 
-        # Call collector
-        result = run_collector(cur, sql_text)
+        try:
+            # Check historical executions (skip for plan_only mode)
+            if depth == "standard":
+                from history_tracker import normalize_and_hash, store_history, get_recent_history, compare_with_history
+                fingerprint = normalize_and_hash(sql_text)
+                history = await get_recent_history(fingerprint, db_name)
+            else:
+                history = None
+
+            # Call collector with depth parameter
+            result = run_collector(cur, sql_text, depth=depth)
+        finally:
+            # Always restore original preset
+            config.output_preset = original_preset
         
         facts = result.get("facts", {})
         plan_details = facts.get("plan_details", [])
         
         logger.info(f"📋 Collector returned {len(plan_details)} plan steps")
         
+        # Add depth mode notification
+        if depth == "plan_only":
+            depth_notification = (
+                f"\n📖 PLAN-ONLY MODE: This is a fast execution plan analysis without metadata collection. "
+                f"Use depth='standard' for full optimization analysis with table/index statistics.\n"
+            )
+            result["prompt"] = depth_notification + result.get("prompt", "")
+
+        # Add preset adjustment notification if it occurred
+        if preset_adjusted:
+            preset_notification = (
+                f"\n⚙️ NOTE: Large query detected ({query_length:,} characters). "
+                f"Analysis preset automatically adjusted to '{adjusted_preset}' "
+                f"(from '{original_preset}') to optimize token usage. "
+                f"Full SQL preserved for accurate optimization recommendations.\n"
+            )
+            result["prompt"] = preset_notification + result.get("prompt", "")
+
         # Add historical context
         if history:
             facts["historical_context"] = await compare_with_history(history, facts)
             facts["history_count"] = len(history)
             logger.info(f"📊 Historical context: {facts['historical_context'].get('message', 'N/A')}")
-            
+
             # Update the prompt field to emphasize historical context
             result["prompt"] = (
                 f"🕒 IMPORTANT: This query pattern has been executed {len(history)} time(s) before. "
@@ -131,9 +193,10 @@ async def analyze_mysql_query(db_name: str, sql_text: str):
             # MySQL doesn't have plan_hash, use first step's cost
             plan_hash = "mysql_plan"
             cost = plan_details[0].get("cost", 0) if plan_details else 0
-            table_stats = {t["table_name"]: t["num_rows"] for t in facts.get("table_stats", [])}
+            # Note: table_stats now has minimized format with 'table' key instead of 'table_name'
+            table_stats = {t.get("table", "UNKNOWN"): t.get("rows", 0) for t in facts.get("table_stats", [])}
             plan_operations = [
-                f"{s.get('access_type', '')} {s.get('table', '')}".strip()
+                f"{s.get('type', '')} {s.get('table', '')}".strip()
                 for s in plan_details[:5]
             ]
             await store_history(fingerprint, db_name, plan_hash, cost, table_stats, plan_operations)

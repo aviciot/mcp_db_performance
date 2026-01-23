@@ -4,6 +4,81 @@ This guide provides step-by-step workflows for common Performance MCP usage scen
 
 ---
 
+## Choosing Analysis Depth
+
+**NEW FEATURE:** Both Oracle and MySQL analysis tools support two analysis modes via the `depth` parameter.
+
+### Depth Modes
+
+| Mode | Speed | Use Case | What You Get |
+|------|-------|----------|--------------|
+| **plan_only** | ⚡ Fast (0.3s) | Understanding execution<br>Learning how queries work<br>Quick plan review | • Execution plan<br>• Operation details<br>• Cost estimates<br>• ❌ No metadata |
+| **standard** | 🔄 Full (1-3s) | Query optimization<br>Getting recommendations<br>Full analysis | • Everything in plan_only<br>• Table/index statistics<br>• Column selectivity<br>• Diagnostics & fixes |
+
+### When to Use Each Mode
+
+#### Use `depth="plan_only"` when:
+- ✅ "Explain what this execution plan means"
+- ✅ "What's an INDEX SKIP SCAN?"
+- ✅ "Why is there a NESTED LOOP?"
+- ✅ "How does the optimizer process this query?"
+- ✅ Learning and education
+
+#### Use `depth="standard"` (default) when:
+- ✅ "Optimize this query"
+- ✅ "Make this faster"
+- ✅ "Recommend indexes"
+- ✅ "Fix performance issues"
+- ✅ Production optimization
+
+### Examples
+
+**Fast Plan Explanation:**
+```python
+# Oracle
+analyze_oracle_query(
+    db_name="prod_db",
+    sql_text="SELECT * FROM orders WHERE status = 'PENDING'",
+    depth="plan_only"  # Fast, educational
+)
+
+# MySQL
+analyze_mysql_query(
+    db_name="mysql_db",
+    sql_text="SELECT * FROM customers WHERE country = 'US'",
+    depth="plan_only"  # Fast, educational
+)
+```
+
+**Full Optimization Analysis:**
+```python
+# Oracle (default behavior)
+analyze_oracle_query(
+    db_name="prod_db",
+    sql_text="SELECT * FROM orders WHERE status = 'PENDING'",
+    depth="standard"  # Full analysis for optimization
+)
+# Or simply omit depth parameter - standard is default
+analyze_oracle_query(
+    db_name="prod_db",
+    sql_text="SELECT * FROM orders WHERE status = 'PENDING'"
+)
+```
+
+### LLM Guidance
+
+**The LLM will automatically choose the right mode based on user intent:**
+
+| User Says | LLM Uses | Reason |
+|-----------|----------|--------|
+| "Explain this plan" | plan_only | Just needs understanding |
+| "What does INDEX RANGE SCAN mean?" | plan_only | Educational |
+| "Optimize this query" | standard | Needs full context for optimization |
+| "Why is this slow?" | standard | Needs diagnostics |
+| "Recommend indexes" | standard | Needs column statistics |
+
+---
+
 ## Workflow 1: Slow Query Analysis
 
 **Scenario:** User reports "This query takes 5 minutes, why is it slow?"
