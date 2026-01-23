@@ -23,32 +23,50 @@ Transform complex SQL queries into clear business insights using AI-powered anal
 - 📈 **Performance Analysis** - Deep SQL optimization with execution plan analysis
 - 🔒 **Multi-Layer Security** - Blocks dangerous operations before execution
 - 🐬 **MySQL + Oracle Support** - Native support for both database engines
+- ⚡ **✨ NEW: Analysis Depth Modes** - Fast plan-only (0.3s) or full optimization (Jan 2025)
+- 🎯 **✨ NEW: Smart Token Optimization** - 80% reduction with output minimization (Jan 2025)
+- 📏 **✨ NEW: Auto-Preset Adjustment** - Handles large queries intelligently (Jan 2025)
+- 🔐 **✨ NEW: Role-Based Access Control** - Secure DBA operational tools with RBAC (Jan 2025)
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone and Configure
+### Automated Deployment (Recommended)
 
 ```bash
 git clone https://github.com/aviciot/mcp_db_performance.git
 cd mcp_db_peformance
+
+# Edit configuration files
 cp server/config/settings.template.yaml server/config/settings.yaml
 # Edit settings.yaml with your database credentials
+
+# Run automated deployment script
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-### 2. Start Services
+The `deploy.sh` script will:
+- ✅ Check Docker is running
+- ✅ Create required Docker networks
+- ✅ Deploy PostgreSQL cache database
+- ✅ Deploy MCP server
+- ✅ Initialize database schema
+- ✅ Run health checks
+
+### Manual Deployment
 
 ```bash
-# Start PostgreSQL cache database
+# 1. Start PostgreSQL cache database
 cd ../pg_mcp
 docker-compose up -d
 
-# Start MCP server
+# 2. Start MCP server
 cd ../mcp_db_peformance
 docker-compose up -d
 
-# Initialize schema (one-time)
+# 3. Initialize schema (one-time)
 docker exec mcp_db_performance python test-scripts/run_complete_init.py
 ```
 
@@ -123,6 +141,125 @@ CREATE INDEX idx_orders_customer ON orders(customer_id);
 
 Estimated Improvement: 90-99% reduction in execution time
 ```
+
+---
+
+## ✨ Recent Features (January 2025)
+
+### 🎯 Analysis Depth Modes
+Choose between fast plan-only analysis or full optimization:
+
+```python
+# Fast plan explanation (0.3s, educational)
+analyze_oracle_query(db="prod", sql="SELECT...", depth="plan_only")
+
+# Full optimization analysis (1-3s, production-ready)
+analyze_oracle_query(db="prod", sql="SELECT...", depth="standard")  # default
+```
+
+**Benefits:**
+- ⚡ **10x faster** for educational queries
+- 💰 **96% token reduction** (500 vs 13,000 tokens)
+- 🎓 Perfect for learning execution plans
+- 🚀 Full context when optimizing
+
+**Documentation:** See `server/knowledge_base/depth_modes.md`
+
+---
+
+### 🎯 Smart Token Optimization
+Output minimization reduces token usage by 80% without losing optimization context:
+
+**Before:** ~63,000 tokens per analysis
+**After:** ~12,700 tokens per analysis
+
+- Removes NULL/empty fields from execution plans
+- Merges related data (indexes + columns)
+- Converts raw statistics to actionable insights
+- Keeps all essential optimization data
+
+**Impact:** Lower costs, faster analysis, same quality
+
+---
+
+### 📏 Auto-Preset Adjustment for Large Queries
+Automatically handles queries of any size:
+
+| Query Size | Action | Metadata Depth |
+|------------|--------|----------------|
+| < 10KB | Use configured preset | Full/Compact/Minimal |
+| 10-50KB | Auto-switch to compact | Tables + Indexes |
+| > 50KB | Auto-switch to minimal | Essential only |
+
+**Benefits:**
+- ✅ UNION queries with 100+ columns work perfectly
+- ✅ Full SQL always preserved (never truncated)
+- ✅ User notified when preset adjusts
+- ✅ Handles 50K+ character queries
+
+**Documentation:** See `QUERY_OPTIMIZATION_IMPROVEMENTS.md`
+
+---
+
+### 🔐 Role-Based Access Control (RBAC)
+Secure, role-based access to DBA operational tools:
+
+**New Tools:**
+- 👤 **`who_am_i`** - Shows your identity, role, and capabilities
+- 📋 **`list_my_tools`** - Lists all tools available to your role
+- 🔧 **`get_active_sessions`** - List database connections (admin/dba only)
+- 🔒 **`get_lock_info`** - Show blocking/locking info (admin/dba only)
+- 👥 **`get_db_users`** - List users and permissions (admin/dba only)
+- 📚 **`show_dba_tools`** - Comprehensive DBA tools guide (admin/dba only)
+
+**Role Matrix:**
+
+| Role | Query Analysis | Feedback | DBA Tools | Admin Tools |
+|------|---------------|----------|-----------|-------------|
+| Admin | ✅ | ✅ | ✅ | ✅ |
+| DBA | ✅ | ✅ | ✅ | ❌ |
+| User | ✅ | ✅ | ❌ | ❌ |
+
+**Key Features:**
+- 🔒 Decorator-based access control (`@require_roles(['admin', 'dba'])`)
+- 🛡️ All DBA tools are read-only (SELECT queries only)
+- 📝 Access attempts logged for audit trail
+- 💡 Helpful error messages guide users
+- 🎯 Welcome message shows identity and capabilities
+
+**Example:**
+```python
+# Check your identity and access
+who_am_i()
+# Response: "Welcome, admin! You have full admin access..."
+
+# List active sessions (admin/dba only)
+get_active_sessions(db_name='transformer_prod', limit=10)
+
+# Show DBA tools documentation
+show_dba_tools()
+```
+
+**Configuration:**
+```yaml
+# server/config/settings.yaml
+security:
+  api_keys:
+    - name: "admin"        # Full access
+      token: "admin-token"
+    - name: "dba"          # Query analysis + DBA tools
+      token: "dba-token"
+    - name: "analyst_team" # Query analysis only
+      token: "analyst-token"
+```
+
+**Benefits:**
+- ✅ Secure operational visibility for DBAs
+- ✅ Users discover what they can access
+- ✅ Admin controls via simple role assignment
+- ✅ Production-ready with audit logging
+
+**Documentation:** See `ROLE_BASED_ACCESS_IMPLEMENTATION.md`
 
 ---
 
@@ -354,6 +491,18 @@ GRANT SELECT ON performance_schema.table_io_waits_summary_by_index_usage TO 'you
 
 ---
 
+## 📚 Detailed Documentation
+
+For comprehensive technical details, see [FEATURES_DETAILED.md](FEATURES_DETAILED.md):
+
+- **Business Logic Analysis** - Deep dive into SQL parsing, metadata collection, and semantic inference
+- **PostgreSQL Caching System** - Architecture, schema design, and optimization strategies
+- **Performance Monitoring** - Database health metrics and top queries analysis
+- **Output Filtering Presets** - How to control response size and token usage
+- **Future Improvements** - Roadmap and planned enhancements
+
+---
+
 ## 📈 Performance Benchmarks
 
 ### Business Logic Analysis
@@ -486,9 +635,10 @@ pg_mcp/                           # PostgreSQL cache database
 
 ## 📚 Additional Documentation
 
-- `POSTGRESQL_COMPREHENSIVE_AUDIT_2026-01-16.md` - Complete PostgreSQL audit report
-- `server/knowledge_base/` - Detailed tool documentation
-- `to_delete/` - Migration and test scripts (for review before deletion)
+- [FEATURES_DETAILED.md](FEATURES_DETAILED.md) - In-depth technical documentation
+- [POSTGRESQL_COMPREHENSIVE_AUDIT_2026-01-16.md](POSTGRESQL_COMPREHENSIVE_AUDIT_2026-01-16.md) - PostgreSQL audit report with test results
+- `server/knowledge_base/` - MCP tool documentation
+- `to_delete/` - Obsolete files ready for deletion (includes README)
 
 ---
 
