@@ -141,9 +141,13 @@ async def get_active_sessions(db_name: str, limit: int = 50):
     except Exception as exc:
         logger.error(f"Error in get_active_sessions: {exc}", exc_info=True)
         return {
-            "error": str(exc),
+            "status": "error",
+            "error_type": "execution_failed",
+            "error_message": str(exc),
             "db_name": db_name,
-            "hint": "Check database connectivity and permissions"
+            "tool_name": "get_active_sessions",
+            "user_message": f"❌ Failed to retrieve active sessions from {db_name}. Error: {exc}",
+            "llm_instruction": "STOP HERE. Report this error to the user and ask what they want to do next. Do NOT attempt automatic troubleshooting."
         }
 
 
@@ -213,9 +217,13 @@ async def get_lock_info(db_name: str):
     except Exception as exc:
         logger.error(f"Error in get_lock_info: {exc}", exc_info=True)
         return {
-            "error": str(exc),
+            "status": "error",
+            "error_type": "execution_failed",
+            "error_message": str(exc),
             "db_name": db_name,
-            "hint": "Check database connectivity and permissions for lock views"
+            "tool_name": "get_lock_info",
+            "user_message": f"❌ Failed to retrieve lock information from {db_name}. Error: {exc}",
+            "llm_instruction": "STOP HERE. Report this error to the user and ask what they want to do next. Do NOT attempt automatic troubleshooting."
         }
 
 
@@ -278,9 +286,13 @@ async def get_db_users(db_name: str, limit: int = 200):
     except Exception as exc:
         logger.error(f"Error in get_db_users: {exc}", exc_info=True)
         return {
-            "error": str(exc),
+            "status": "error",
+            "error_type": "execution_failed",
+            "error_message": str(exc),
             "db_name": db_name,
-            "hint": "Check database connectivity and DBA permissions"
+            "tool_name": "get_db_users",
+            "user_message": f"❌ Failed to retrieve database users from {db_name}. Error: {exc}",
+            "llm_instruction": "STOP HERE. Report this error to the user and ask what they want to do next. Do NOT attempt automatic troubleshooting."
         }
 
 
