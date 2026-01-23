@@ -1,0 +1,116 @@
+# Traefik Dynamic Configuration - Middlewares
+# ============================================
+
+http:
+  middlewares:
+    # -------------------------------------------------------------------------
+    # AUTH INTEGRATION - forwardAuth Middleware
+    # -------------------------------------------------------------------------
+    auth-service-validate:
+      forwardAuth:
+        address: "http://auth_service:8001/validate"
+        authResponseHeaders:
+          - "X-User-Id"
+          - "X-User-Email"
+          - "X-User-Role"
+          - "X-User-Permissions"
+          - "X-User-Username"
+        trustForwardHeader: true
+
+    # -------------------------------------------------------------------------
+    # MCP MIDDLEWARE CHAIN - WITH AUTH
+    # -------------------------------------------------------------------------
+    mcp-authenticated:
+      chain:
+        middlewares:
+          - auth-service-validate  # FIRST: Validate JWT token (forwardAuth)
+          - strip-mcp-prefix       # THEN: Strip prefix
+          - sse-headers            # THEN: Add SSE headers
+          - rate-limit-default     # THEN: Rate limit
+
+    # -------------------------------------------------------------------------
+    # PREFIX STRIPPING
+    # -------------------------------------------------------------------------
+    strip-mcp-prefix:
+      stripPrefix:
+        prefixes:
+          - "/omni2-mcp"
+        forceSlash: true
+
+    strip-prefix-auth:
+      stripPrefix:
+        prefixes:
+          - "/auth"
+        forceSlash: true
+
+    # -------------------------------------------------------------------------
+    # SSE HEADERS (for MCP streaming)
+    # -------------------------------------------------------------------------
+    sse-headers:
+      headers:
+        customResponseHeaders:
+          Cache-Control: "no-cache"
+          Connection: "keep-alive"
+          X-Accel-Buffering: "no"  # Disable proxy buffering for SSE
+
+    # -------------------------------------------------------------------------
+    # RATE LIMITING
+    # -------------------------------------------------------------------------
+    rate-limit-default:
+      rateLimit:
+        average: 100      # 100 req/sec average
+        burst: 200        # Allow bursts up to 200
+        period: 1s
+        # Rate limit per user (not per IP)
+        sourceCriterion:
+          requestHeaderName: "X-User-Id"
+
+    rate-limit-auth:
+      rateLimit:
+        average: 5        # Stricter for auth endpoints
+        burst: 10
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1  # Use client IP
+
+    # -------------------------------------------------------------------------
+    # CORS HEADERS (if needed for browser requests)
+    # -------------------------------------------------------------------------
+    cors-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - "*"
+        accessControlAllowOriginList:
+          - "http://localhost:3000"
+          - "http://localhost:3001"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # -------------------------------------------------------------------------
+    # HTTPS REDIRECT (for production)
+    # -------------------------------------------------------------------------
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    # -------------------------------------------------------------------------
+    # SECURITY HEADERS (for production)
+    # -------------------------------------------------------------------------
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsSeconds: 31536000  # 1 year
+        stsPreload: true

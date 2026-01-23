@@ -1,0 +1,153 @@
+# Docker Compose - Auth Service Integration
+# ==========================================
+# Add this auth_service section to your existing mcp-gateway/docker-compose.yml
+
+version: '3.8'
+
+networks:
+  traefik-network:
+    external: true  # Or create if not exists
+
+services:
+  # ===========================================================================
+  # AUTH SERVICE (NEW)
+  # ===========================================================================
+  auth_service:
+    build:
+      context: ../auth_service
+      dockerfile: Dockerfile
+    container_name: auth_service
+    restart: unless-stopped
+    environment:
+      # Database
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: omni
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRY_SECONDS: 3600
+      REFRESH_TOKEN_EXPIRY_SECONDS: 604800
+
+      # Redis (for caching)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # API Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8001
+
+      # Logging
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8001"  # Expose for testing (can remove in production)
+    networks:
+      - traefik-network
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================================================
+  # REDIS (if not already present)
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - traefik-network
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ===========================================================================
+  # POSTGRES (if not already present)
+  # ===========================================================================
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: omni
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - traefik-network
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+
+  # ===========================================================================
+  # TRAEFIK (existing - just showing labels for reference)
+  # ===========================================================================
+  # traefik:
+  #   image: traefik:v2.10
+  #   container_name: traefik
+  #   restart: unless-stopped
+  #   command:
+  #     - "--api.insecure=true"
+  #     - "--providers.docker=true"
+  #     - "--providers.docker.exposedbydefault=false"
+  #     - "--providers.file.directory=/etc/traefik/dynamic"
+  #     - "--providers.file.watch=true"
+  #     - "--entrypoints.web.address=:80"
+  #   ports:
+  #     - "80:80"
+  #     - "8080:8080"  # Traefik dashboard
+  #   networks:
+  #     - traefik-network
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - ./config/traefik/dynamic:/etc/traefik/dynamic:ro
+
+  # ===========================================================================
+  # OMNI2 HUB (existing)
+  # ===========================================================================
+  # omni2:
+  #   build:
+  #     context: ../omni2
+  #     dockerfile: Dockerfile
+  #   container_name: omni2
+  #   restart: unless-stopped
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/omni
+  #   networks:
+  #     - traefik-network
+  #   depends_on:
+  #     - postgres
+
+volumes:
+  redis-data:
+    driver: local
+  # postgres-data:
+  #   driver: local
+
+# ===========================================================================
+# ENVIRONMENT VARIABLES (.env file)
+# ===========================================================================
+# Create .env file with:
+#
+# POSTGRES_PASSWORD=your-database-password
+# JWT_SECRET=your-256-bit-secret-key-generate-with-openssl-rand-hex-32

@@ -1,0 +1,74 @@
+# Traefik Dynamic Configuration - Services
+# =========================================
+
+http:
+  services:
+    # -------------------------------------------------------------------------
+    # AUTH SERVICE
+    # -------------------------------------------------------------------------
+    auth-service:
+      loadBalancer:
+        servers:
+          - url: "http://auth_service:8001"
+        healthCheck:
+          path: "/health"
+          interval: "10s"
+          timeout: "3s"
+        passHostHeader: true
+
+    # -------------------------------------------------------------------------
+    # OMNI2 HUB SERVICE
+    # -------------------------------------------------------------------------
+    omni2-hub-service:
+      loadBalancer:
+        servers:
+          - url: "http://omni2:8000"
+        healthCheck:
+          path: "/health"
+          interval: "10s"
+          timeout: "3s"
+        passHostHeader: true
+
+    # -------------------------------------------------------------------------
+    # OMNI2 ADMIN FRONTEND (if separate from hub)
+    # -------------------------------------------------------------------------
+    # omni2-admin-service:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://omni2-admin:3000"
+    #     healthCheck:
+    #       path: "/"
+    #       interval: "30s"
+    #       timeout: "5s"
+    #     passHostHeader: true
+
+    # -------------------------------------------------------------------------
+    # INDIVIDUAL MCP SERVICES (if needed for direct access)
+    # -------------------------------------------------------------------------
+    # database-mcp-service:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://database-mcp:8000"
+    #     healthCheck:
+    #       path: "/health"
+    #       interval: "10s"
+    #       timeout: "3s"
+    #     passHostHeader: true
+
+    # macgyver-mcp-service:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://macgyver-mcp:8000"
+    #     healthCheck:
+    #       path: "/health"
+    #       interval: "10s"
+    #       timeout: "3s"
+    #     passHostHeader: true
+
+# ===========================================================================
+# NOTES
+# ===========================================================================
+# 1. Service URLs use Docker service names (from docker-compose.yml)
+# 2. Health checks ensure services are ready before routing traffic
+# 3. passHostHeader: true preserves the original Host header
+# 4. Add your MCP services here as needed

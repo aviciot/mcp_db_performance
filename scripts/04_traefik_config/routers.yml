@@ -1,0 +1,86 @@
+# Traefik Dynamic Configuration - Routers
+# ========================================
+
+http:
+  routers:
+    # -------------------------------------------------------------------------
+    # AUTH SERVICE ROUTER (NO AUTH - allows login)
+    # -------------------------------------------------------------------------
+    auth-service-router:
+      rule: "PathPrefix(`/auth`)"
+      entryPoints:
+        - web
+      service: auth-service
+      middlewares:
+        - strip-prefix-auth   # Strip /auth prefix
+        - rate-limit-auth     # Rate limit login attempts
+      priority: 100  # Higher priority than catch-all routes
+
+    # -------------------------------------------------------------------------
+    # OMNI2 HUB ROUTER (WITH AUTH)
+    # -------------------------------------------------------------------------
+    omni2-hub-router:
+      rule: "PathPrefix(`/omni2-mcp`)"
+      entryPoints:
+        - web
+      service: omni2-hub-service
+      middlewares:
+        - mcp-authenticated  # Uses forwardAuth + SSE headers + rate limiting
+      priority: 90
+
+    # -------------------------------------------------------------------------
+    # OMNI2 ADMIN FRONTEND (WITH AUTH - if needed)
+    # -------------------------------------------------------------------------
+    # Uncomment if you want to protect the admin frontend with authentication
+    # omni2-admin-router:
+    #   rule: "PathPrefix(`/admin`)"
+    #   entryPoints:
+    #     - web
+    #   service: omni2-admin-service
+    #   middlewares:
+    #     - auth-service-validate  # Require authentication
+    #   priority: 85
+
+    # -------------------------------------------------------------------------
+    # INDIVIDUAL MCP ROUTERS (if needed for direct access)
+    # -------------------------------------------------------------------------
+    # database-mcp-router:
+    #   rule: "PathPrefix(`/mcp/database`)"
+    #   entryPoints:
+    #     - web
+    #   service: database-mcp-service
+    #   middlewares:
+    #     - mcp-authenticated
+    #   priority: 80
+
+    # -------------------------------------------------------------------------
+    # HEALTH CHECK ROUTER (NO AUTH)
+    # -------------------------------------------------------------------------
+    health-check-router:
+      rule: "Path(`/health`) || Path(`/healthz`)"
+      entryPoints:
+        - web
+      service: traefik-internal
+      priority: 110  # Highest priority
+
+    # -------------------------------------------------------------------------
+    # HTTPS REDIRECT (for production)
+    # -------------------------------------------------------------------------
+    # Uncomment in production to force HTTPS
+    # http-to-https-router:
+    #   rule: "HostRegexp(`{any:.+}`)"
+    #   entryPoints:
+    #     - web
+    #   middlewares:
+    #     - https-redirect
+    #   service: noop@internal
+    #   priority: 1  # Lowest priority (catch-all)
+
+  # ===========================================================================
+  # SERVICES (internal Traefik services)
+  # ===========================================================================
+  services:
+    traefik-internal:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1"  # Dummy URL (health check returns from Traefik itself)
