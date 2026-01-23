@@ -559,7 +559,7 @@ startup:
 postgresql_cache:
   # Connection settings (use environment variables for production)
   host: omni_pg_db  # PostgreSQL host (Docker service name)
-  port: 5432  # PostgreSQL port
+  port: 5435  # PostgreSQL port (custom port for omni_pg_db)
   database: omni  # PostgreSQL database name
   user: omni  # PostgreSQL username
   password: postgres  # PostgreSQL password (use env var KNOWLEDGE_DB_PASSWORD)
