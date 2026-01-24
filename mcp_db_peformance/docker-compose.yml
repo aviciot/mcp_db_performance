@@ -1,0 +1,122 @@
+services:
+  mcp_db_performance:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: mcp_db_performance
+    # Direct port access + Traefik routing (both available)
+    ports:
+      - "${MCP_PORT:-8100}:${MCP_PORT:-8100}"
+
+    # 🔥 Hot reload for BOTH code and settings.yaml
+    volumes:
+      - ./server:/app
+      - ./server/config/settings.yaml:/app/config/settings.yaml:ro
+      - ./server/data:/app/data
+      - ./server/test-scripts:/app/test-scripts  # Mount test scripts
+
+    env_file:
+      - .env
+
+    environment:
+      MCP_PORT: ${MCP_PORT:-8100}
+      UVICORN_RELOAD: ${UVICORN_RELOAD:-"false"}
+      # PostgreSQL Knowledge DB Configuration (dedicated user per MCP)
+      KNOWLEDGE_DB_HOST: ${KNOWLEDGE_DB_HOST:-omni_pg_db}
+      KNOWLEDGE_DB_PORT: ${KNOWLEDGE_DB_PORT:-5435}
+      KNOWLEDGE_DB_NAME: ${KNOWLEDGE_DB_NAME:-omni}
+      KNOWLEDGE_DB_USER: ${KNOWLEDGE_DB_USER:-mcp_db_performance}
+      KNOWLEDGE_DB_PASSWORD: ${KNOWLEDGE_DB_PASSWORD:-mcp_db_performance}
+      # Logging Configuration
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: "1"  # Ensure logs are flushed immediately
+
+    restart: unless-stopped
+    
+    # Health check to verify MCP server is responding
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # ============================================================
+    # TRAEFIK GATEWAY INTEGRATION
+    # ============================================================
+    # Connects to external mcp-gateway-net for load balancing
+    networks:
+      - mcp-gateway-net
+      - db-net
+
+    labels:
+      - "traefik.enable=true"
+      # Router: match path prefix /mcp-performance
+      - "traefik.http.routers.mcp-performance.rule=PathPrefix(`/mcp-performance`)"
+      - "traefik.http.routers.mcp-performance.entrypoints=web"
+      # Strip prefix before forwarding to service
+      - "traefik.http.routers.mcp-performance.middlewares=mcp-performance-strip"
+      - "traefik.http.middlewares.mcp-performance-strip.stripprefix.prefixes=/mcp-performance"
+      # Service: internal port 8100
+      - "traefik.http.services.mcp-performance.loadbalancer.server.port=8100"
+
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.mcp-performance.rule=PathPrefix(`/mcp-performance`)"
+    #   - "traefik.http.routers.mcp-performance.entrypoints=web"
+    #   - "traefik.http.routers.mcp-performance.middlewares=mcp-stateless@file"
+    #   - "traefik.http.services.mcp-performance.loadbalancer.server.port=8100"
+    #   - "traefik.http.services.mcp-performance.loadbalancer.healthcheck.path=/health"
+
+      # ============================================================
+      # Core identity
+      # ============================================================
+      - "app.name=mcp-performance"
+      - "app.environment=dev-mcp"
+      # ============================================================
+      # Description
+      # ============================================================
+      - "app.description=MCP service for advanced DB performance analysis and optimization"
+      # ============================================================
+      # Role & behavior
+      # ============================================================
+      - "app.role=mcp"
+      - "app.statefulness=stateless"
+      - "app.scale=scalable"
+
+      # ============================================================
+      # Access & exposure
+      # ============================================================
+      - "app.access=direct+gateway"
+      - "app.entrypoint=/mcp-performance"
+      - "app.port.internal=8100"
+      - "app.port.external=${MCP_PORT:-8100}"
+
+      # ============================================================
+      # Safety & lifecycle
+      # ============================================================
+      - "app.criticality=medium"
+      - "app.safe_to_restart=true"
+      - "app.safe_to_stop=true"
+      - "app.safe_to_scale=true"
+
+      # ============================================================
+      # Dependencies
+      # ============================================================
+      - "app.depends_on=pg:omni"
+      - "app.networks=mcp-gateway-net,db-net"
+
+      # ============================================================
+      # Ownership
+      # ============================================================
+      - "app.owner=data-services"
+      - "app.creator=Avi Cohen"
+      - "app.team=ds-ai"
+
+# Use external mcp-gateway-net (created by mcp-gateway docker-compose)
+networks:
+  mcp-gateway-net:
+    external: true
+  db-net:
+    external: true
+
