@@ -21,12 +21,12 @@ services:
     environment:
       MCP_PORT: ${MCP_PORT:-8100}
       UVICORN_RELOAD: ${UVICORN_RELOAD:-"false"}
-      # PostgreSQL Knowledge DB Configuration
+      # PostgreSQL Knowledge DB Configuration (dedicated user per MCP)
       KNOWLEDGE_DB_HOST: ${KNOWLEDGE_DB_HOST:-omni_pg_db}
       KNOWLEDGE_DB_PORT: ${KNOWLEDGE_DB_PORT:-5435}
       KNOWLEDGE_DB_NAME: ${KNOWLEDGE_DB_NAME:-omni}
-      KNOWLEDGE_DB_USER: ${KNOWLEDGE_DB_USER:-omni}
-      KNOWLEDGE_DB_PASSWORD: ${KNOWLEDGE_DB_PASSWORD:-omni}
+      KNOWLEDGE_DB_USER: ${KNOWLEDGE_DB_USER:-mcp_db_performance}
+      KNOWLEDGE_DB_PASSWORD: ${KNOWLEDGE_DB_PASSWORD:-mcp_db_performance}
       # Logging Configuration
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       PYTHONUNBUFFERED: "1"  # Ensure logs are flushed immediately
